@@ -1,51 +1,51 @@
 # smoo-app
 
-`smoo-app` is a monorepo with an Expo frontend and a Spring Boot backend.
+`smoo-app`은 Expo 프론트엔드와 Spring Boot 백엔드를 함께 관리하는 모노레포 프로젝트입니다.
 
-## Structure
+## 프로젝트 구조
 
 ```text
 smoo-app/
-  frontend/   Expo app
-  backend/    Spring Boot app
+  frontend/   Expo 앱
+  backend/    Spring Boot 앱
 ```
 
-## Required Versions
+## 필수 버전
 
 - Node.js: `20.x`
 - Java: `17`
-- Docker Desktop: latest stable
+- Docker Desktop: 최신 안정 버전
 
-## Frontend
+## 프론트엔드
 
-Run from [frontend](C:\Users\park2\GitHub\smoo-app\frontend):
+[frontend](C:\Users\park2\GitHub\smoo-app\frontend) 경로에서 실행합니다.
 
 ```cmd
 npx expo start
 ```
 
-## Backend
+## 백엔드
 
-Run from [backend](C:\Users\park2\GitHub\smoo-app\backend):
+[backend](C:\Users\park2\GitHub\smoo-app\backend) 경로에서 실행합니다.
 
 ```cmd
 gradlew.bat bootRun
 ```
 
-Health check:
+헬스 체크:
 
 - [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health)
 
-## Backend Configuration
+## 백엔드 설정 파일
 
-- [application.yaml](C:\Users\park2\GitHub\smoo-app\backend\src\main\resources\application.yaml): shared settings committed to Git
-- [application-local.example.yaml](C:\Users\park2\GitHub\smoo-app\backend\src\main\resources\application-local.example.yaml): copy template for local setup
-- [application-local.yaml](C:\Users\park2\GitHub\smoo-app\backend\src\main\resources\application-local.yaml): local-only settings, do not commit
-- [backend/.env.example](C:\Users\park2\GitHub\smoo-app\backend\.env.example): example values for team onboarding
+- [application.yaml](C:\Users\park2\GitHub\smoo-app\backend\src\main\resources\application.yaml): Git에 커밋하는 공통 설정 파일
+- [application-local.example.yaml](C:\Users\park2\GitHub\smoo-app\backend\src\main\resources\application-local.example.yaml): 로컬 설정 파일 예시 템플릿
+- [application-local.yaml](C:\Users\park2\GitHub\smoo-app\backend\src\main\resources\application-local.yaml): 개인 로컬 전용 설정 파일, 커밋 금지
+- [backend/.env.example](C:\Users\park2\GitHub\smoo-app\backend\.env.example): 팀원 온보딩용 예시 환경 변수 파일
 
-Supabase is used as the external PostgreSQL database. Do not commit real database passwords or service keys.
+Supabase를 외부 PostgreSQL 데이터베이스로 사용합니다. 실제 DB 비밀번호나 서비스 키는 Git에 커밋하면 안 됩니다.
 
-Create your local backend config by copying the example file:
+예시 파일을 복사해서 로컬 백엔드 설정 파일을 생성합니다.
 
 ```cmd
 copy backend\src\main\resources\application-local.example.yaml backend\src\main\resources\application-local.yaml
@@ -53,16 +53,16 @@ copy backend\src\main\resources\application-local.example.yaml backend\src\main\
 
 ## Docker
 
-Run from the repository root [smoo-app](C:\Users\park2\GitHub\smoo-app):
+저장소 루트 [smoo-app](C:\Users\park2\GitHub\smoo-app) 경로에서 실행합니다.
 
 ```cmd
 docker compose up --build
 ```
 
-This starts the backend container on port `8080`.
+위 명령은 백엔드 컨테이너를 `8080` 포트에서 실행합니다.
 
-## Notes
+## 참고 사항
 
-- Open IntelliJ from the repository root when working across frontend and backend.
-- Run Gradle commands from [backend](C:\Users\park2\GitHub\smoo-app\backend).
-- Keep `service_role` keys on the backend side only.
+- 프론트엔드와 백엔드를 함께 작업할 때는 IntelliJ를 저장소 루트에서 여는 것을 권장합니다.
+- Gradle 명령은 [backend](C:\Users\park2\GitHub\smoo-app\backend) 경로에서 실행합니다.
+- `service_role` 키는 백엔드에서만 사용해야 합니다.
