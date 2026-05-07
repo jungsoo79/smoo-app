@@ -8,6 +8,10 @@
 *.ipr
 .vscode/
 
+# Local AI/development notes
+AGENTS.md
+docs/
+
 # Frontend dependencies and build output
 frontend/node_modules/
 frontend/.expo/
@@ -43,6 +47,7 @@ backend/bin/
 
 # Backend local files and secrets
 backend/.env
+backend/.env.local
 backend/src/main/resources/application-local.yaml
 
 # Logs
