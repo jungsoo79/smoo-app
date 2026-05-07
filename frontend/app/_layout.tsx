@@ -20,7 +20,7 @@ export default function RootLayout() {
         <Stack.Screen name="signup" />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       </Stack>
-      <StatusBar style="auto" />
+      <StatusBar backgroundColor="#F8F9FA" style="dark" translucent={false} />
     </ThemeProvider>
   );
 }
