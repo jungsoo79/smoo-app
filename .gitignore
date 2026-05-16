@@ -1,0 +1,61 @@
+# OS
+.DS_Store
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+
+# Local AI/development notes
+AGENTS.md
+docs/
+
+# Frontend dependencies and build output
+frontend/node_modules/
+frontend/.expo/
+frontend/dist/
+frontend/web-build/
+frontend/.kotlin/
+frontend/.metro-health-check*
+frontend/coverage/
+frontend/*.tsbuildinfo
+frontend/expo-env.d.ts
+
+# Generated native folders
+frontend/android/
+frontend/ios/
+
+# Frontend local files and secrets
+frontend/.env
+frontend/.env.local
+frontend/.env*.local
+frontend/*.jks
+frontend/*.p8
+frontend/*.p12
+frontend/*.key
+frontend/*.mobileprovision
+frontend/*.pem
+frontend/*.orig.*
+
+# Backend build output
+backend/.gradle/
+backend/build/
+backend/out/
+backend/bin/
+
+# Backend local files and secrets
+backend/.env
+backend/.env.local
+backend/src/main/resources/application-local.yaml
+
+# Logs
+*.log
+logs/
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Keep wrapper and source directories trackable
+!backend/gradle/wrapper/gradle-wrapper.jar
