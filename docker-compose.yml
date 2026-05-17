@@ -4,9 +4,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: smoo-backend
+    env_file:
+      - ./backend/.env
     ports:
       - "8080:8080"
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres
-      SPRING_DATASOURCE_USERNAME: postgres.zkqdwzqjlhylxicmixel
-      SPRING_DATASOURCE_PASSWORD: YOUR_SUPABASE_DB_PASSWORD
+    restart: unless-stopped
