@@ -4,6 +4,8 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 
 import { AppBottomNav, AppTopBar } from '@/components/app-chrome';
 
+import { memos } from '@/constants/memoMockData';
+
 const scheduleItems = [
   { time: '09:00', title: '모닝 싱크', description: '디자인 리뷰' },
   { time: '11:30', title: '클라이언트 콜', description: '스무 프로젝트', muted: true },
@@ -16,16 +18,10 @@ const todoItems = [
   { title: '랜딩 에셋 업데이트', checked: true },
 ];
 
-const memoItems = [
-  {
-    title: '제목 1 입니다',
-    body: '내용 1 입니다람쥐렁이이ㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣ.....',
-  },
-  {
-    title: '제목 2 입니다',
-    body: '내용 2 입니다람쥐렁이이ㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣㅣ.....',
-  },
-];
+const memoItems = memos.slice(0, 2).map((memo) => ({
+  title: memo.title,
+  body: memo.body.join(' '),
+}));
 
 export default function HomeScreen() {
   return (
