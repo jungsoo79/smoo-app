@@ -13,8 +13,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { signup } from '@/features/auth/api';
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const VERIFICATION_CODE = '123456';
 
 export default function SignupScreen() {
   const [email, setEmail] = useState('');
@@ -27,6 +28,8 @@ export default function SignupScreen() {
   const [isPasswordVisible, setPasswordVisible] = useState(false);
   const [isConfirmVisible, setConfirmVisible] = useState(false);
   const [isSubmitted, setSubmitted] = useState(false);
+  const [isSigningUp, setSigningUp] = useState(false);
+  const [signupError, setSignupError] = useState('');
 
   const trimmedEmail = email.trim();
   const trimmedNickname = nickname.trim();
@@ -51,7 +54,7 @@ export default function SignupScreen() {
 
   const codeMessage = useMemo(() => {
     if (isCodeVerified) {
-      return '이메일 인증이 완료되었습니다.';
+      return '이메일 형식 확인이 완료되었습니다.';
     }
 
     if (!isCodeSent) {
@@ -66,7 +69,7 @@ export default function SignupScreen() {
       return '인증번호 6자리를 입력해주세요.';
     }
 
-    return '인증번호가 일치하지 않습니다.';
+    return '';
   }, [isCodeSent, isCodeVerified, verificationCode.length]);
 
   const passwordMessage = useMemo(() => {
@@ -107,6 +110,7 @@ export default function SignupScreen() {
 
   const handleSendCode = () => {
     setSubmitted(true);
+    setSignupError('');
 
     if (!isEmailValid) {
       setCodeSent(false);
@@ -115,26 +119,45 @@ export default function SignupScreen() {
     }
 
     setCodeSent(true);
-    setCodeVerified(false);
+    setCodeVerified(true);
     setVerificationCode('');
   };
 
   const handleVerifyCode = () => {
-    if (!isCodeSent || verificationCode.length < 6) {
+    if (!isCodeSent) {
       return;
     }
 
-    setCodeVerified(verificationCode === VERIFICATION_CODE);
+    setCodeVerified(true);
   };
 
-  const handleSignup = () => {
+  const handleSignup = async () => {
     setSubmitted(true);
+    setSignupError('');
 
     if (!canSubmit) {
       return;
     }
 
-    router.replace('/login');
+    try {
+      setSigningUp(true);
+      await signup(trimmedEmail, password);
+      router.replace('/login');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'SIGNUP_FAILED';
+
+      if (message === 'EMAIL_ALREADY_EXISTS') {
+        setSignupError('이미 가입된 이메일입니다.');
+      } else if (message === 'WEAK_PASSWORD') {
+        setSignupError('비밀번호가 너무 약합니다.');
+      } else if (message === 'EMAIL_RATE_LIMIT') {
+        setSignupError('이메일 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.');
+      } else {
+        setSignupError('회원가입에 실패했습니다.');
+      }
+    } finally {
+      setSigningUp(false);
+    }
   };
 
   return (
@@ -165,6 +188,7 @@ export default function SignupScreen() {
                     setCodeSent(false);
                     setCodeVerified(false);
                     setVerificationCode('');
+                    setSignupError('');
                   }}
                   placeholder="name@example.com"
                   placeholderTextColor="#A3A3A3"
@@ -181,8 +205,8 @@ export default function SignupScreen() {
                 </Pressable>
               </View>
               {emailMessage ? <Text style={styles.errorText}>{emailMessage}</Text> : null}
-              {isCodeSent && !isCodeVerified ? (
-                <Text style={styles.helperText}>인증번호 {VERIFICATION_CODE}을 입력해 확인하세요.</Text>
+              {isCodeVerified ? (
+                <Text style={styles.helperText}>회원가입 요청 시 이메일 인증 메일이 발송될 수 있습니다.</Text>
               ) : null}
             </View>
 
@@ -246,7 +270,10 @@ export default function SignupScreen() {
               <Text style={styles.label}>닉네임</Text>
               <TextInput
                 autoCapitalize="none"
-                onChangeText={setNickname}
+                onChangeText={(value) => {
+                  setNickname(value);
+                  setSignupError('');
+                }}
                 placeholder="예: smoo"
                 placeholderTextColor="#A3A3A3"
                 style={[styles.input, nicknameMessage && styles.inputError]}
@@ -255,11 +282,19 @@ export default function SignupScreen() {
               {nicknameMessage ? <Text style={styles.errorText}>{nicknameMessage}</Text> : null}
             </View>
 
+            {signupError ? (
+              <View style={styles.formMessage}>
+                <MaterialIcons color="#BA1A1A" name="error-outline" size={18} />
+                <Text style={styles.formMessageText}>{signupError}</Text>
+              </View>
+            ) : null}
+
             <Pressable
+              disabled={isSigningUp}
               onPress={handleSignup}
-              style={[styles.primaryButton, !canSubmit && styles.primaryButtonDisabled]}>
-              <Text style={[styles.primaryButtonText, !canSubmit && styles.primaryButtonTextDisabled]}>
-                회원가입
+              style={[styles.primaryButton, (!canSubmit || isSigningUp) && styles.primaryButtonDisabled]}>
+              <Text style={[styles.primaryButtonText, (!canSubmit || isSigningUp) && styles.primaryButtonTextDisabled]}>
+                {isSigningUp ? '회원가입 중...' : '회원가입'}
               </Text>
             </Pressable>
           </View>
@@ -492,6 +527,22 @@ const styles = StyleSheet.create({
     color: '#15803D',
     fontSize: 12,
     lineHeight: 16,
+    fontWeight: '600',
+  },
+  formMessage: {
+    minHeight: 44,
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFF8F7',
+  },
+  formMessageText: {
+    flex: 1,
+    color: '#BA1A1A',
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: '600',
   },
   helperText: {

@@ -13,8 +13,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const TEST_ID = 'test';
-const TEST_PASSWORD = 'test';
+import { login } from '@/features/auth/api';
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function LoginScreen() {
   const [loginId, setLoginId] = useState('');
@@ -22,10 +23,11 @@ export default function LoginScreen() {
   const [isPasswordVisible, setPasswordVisible] = useState(false);
   const [isPasswordFocused, setPasswordFocused] = useState(false);
   const [isSubmitted, setSubmitted] = useState(false);
+  const [isLoggingIn, setLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState('');
 
   const trimmedLoginId = loginId.trim();
-  const isLoginIdFilled = trimmedLoginId.length > 0;
+  const isLoginIdFilled = EMAIL_PATTERN.test(trimmedLoginId);
   const isPasswordFilled = password.length > 0;
 
   const loginIdError = useMemo(() => {
@@ -34,11 +36,11 @@ export default function LoginScreen() {
     }
 
     if (trimmedLoginId.length === 0) {
-      return '아이디를 입력해주세요.';
+      return '이메일을 입력해주세요.';
     }
 
-    return '';
-  }, [isSubmitted, trimmedLoginId.length]);
+    return isLoginIdFilled ? '' : '올바른 이메일 형식이 아닙니다.';
+  }, [isLoginIdFilled, isSubmitted, trimmedLoginId.length]);
 
   const passwordError = useMemo(() => {
     if (!isSubmitted && password.length === 0) {
@@ -48,7 +50,7 @@ export default function LoginScreen() {
     return isPasswordFilled ? '' : '비밀번호를 입력해주세요.';
   }, [isPasswordFilled, isSubmitted, password.length]);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setSubmitted(true);
     setLoginError('');
 
@@ -56,12 +58,16 @@ export default function LoginScreen() {
       return;
     }
 
-    if (trimmedLoginId !== TEST_ID || password !== TEST_PASSWORD) {
-      setLoginError('아이디 또는 비밀번호가 일치하지 않습니다.');
-      return;
+    try {
+      setLoggingIn(true);
+      await login(trimmedLoginId, password);
+      router.replace('/(tabs)');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'LOGIN_FAILED';
+      setLoginError(message === 'INVALID_CREDENTIALS' ? '이메일 또는 비밀번호가 일치하지 않습니다.' : '로그인에 실패했습니다.');
+    } finally {
+      setLoggingIn(false);
     }
-
-    router.replace('/(tabs)');
   };
 
   const handleSocialLogin = () => {
@@ -85,18 +91,19 @@ export default function LoginScreen() {
 
           <View style={styles.form}>
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>아이디</Text>
+              <Text style={styles.label}>이메일</Text>
               <TextInput
                 autoCapitalize="none"
-                autoComplete="username"
+                autoComplete="email"
+                keyboardType="email-address"
                 onChangeText={(value) => {
                   setLoginId(value);
                   setLoginError('');
                 }}
-                placeholder="test"
+                placeholder="name@example.com"
                 placeholderTextColor="#A3A3A3"
                 style={[styles.input, loginIdError && styles.inputError]}
-                textContentType="username"
+                textContentType="emailAddress"
                 value={loginId}
               />
               {loginIdError ? <Text style={styles.errorText}>{loginIdError}</Text> : null}
@@ -146,8 +153,11 @@ export default function LoginScreen() {
               </View>
             ) : null}
 
-            <Pressable onPress={handleLogin} style={styles.primaryButton}>
-              <Text style={styles.primaryButtonText}>로그인</Text>
+            <Pressable
+              disabled={isLoggingIn}
+              onPress={handleLogin}
+              style={[styles.primaryButton, isLoggingIn && styles.primaryButtonDisabled]}>
+              <Text style={styles.primaryButtonText}>{isLoggingIn ? '로그인 중...' : '로그인'}</Text>
             </Pressable>
 
             <View style={styles.dividerRow}>
@@ -300,6 +310,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 24,
     elevation: 8,
+  },
+  primaryButtonDisabled: {
+    backgroundColor: '#777777',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   primaryButtonText: {
     color: '#FFFFFF',

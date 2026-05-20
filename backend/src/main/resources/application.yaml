@@ -12,3 +12,7 @@ management:
     web:
       exposure:
         include: health,info
+
+supabase:
+  url: ${SUPABASE_URL}
+  anon-key: ${SUPABASE_ANON_KEY}
