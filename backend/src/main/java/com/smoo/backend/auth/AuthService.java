@@ -121,4 +121,32 @@ public class AuthService {
         }
         
     }
+
+    public void verifyEmail(String email, String token) {
+        String url = supabaseUrl + "/auth/v1/verify";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("apikey", supabaseAnonKey);
+
+        Map<String, String> body = new HashMap<>();
+        body.put("type", "signup");
+        body.put("email", email);
+        body.put("token", token);
+
+        HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
+
+        try {
+            restTemplate.postForEntity(url, entity, Map.class);
+        } catch (HttpClientErrorException e) {
+            String errorBody = e.getResponseBodyAsString();
+            if (errorBody.contains("Token has expired")) {
+                throw new RuntimeException("OTP_EXPIRED");
+            } else if (errorBody.contains("invalid")) {
+                throw new RuntimeException("OTP_INVALID");
+            } else {
+                throw new RuntimeException("VERIFY_FAILED");
+            }
+        }
+    }
 }
