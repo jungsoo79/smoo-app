@@ -13,6 +13,7 @@ import {
 import DraggableFlatList, { type RenderItemParams } from 'react-native-draggable-flatlist';
 
 import { AppBottomNav, AppFloatingActionButton, AppTopBar } from '@/components/app-chrome';
+import { AppColors, AppTypography } from '@/constants/appStyles';
 import { AddTodoSheet } from '@/features/checklist/components/AddTodoSheet';
 
 const koreanWeekdays = ['일', '월', '화', '수', '목', '금', '토'];
@@ -630,18 +631,15 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   taskTitle: {
-    color: '#191C1D',
-    fontSize: 15,
-    lineHeight: 22,
+    ...AppTypography.body,
     fontWeight: '500',
   },
   taskTitleDone: {
     textDecorationLine: 'line-through',
   },
   taskMemo: {
-    color: '#474747',
-    fontSize: 13,
-    lineHeight: 18,
+    ...AppTypography.caption,
+    color: AppColors.textSecondary,
     fontWeight: '500',
   },
   taskMemoDone: {
