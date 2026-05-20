@@ -3,6 +3,8 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Calendar, type DateData } from 'react-native-calendars';
 
+import { AppTypography } from '@/constants/appStyles';
+
 import type { DailySummary } from '../types';
 import { formatMonthTitle, formatSignedWon } from './formatters';
 
@@ -174,9 +176,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   monthTitle: {
-    color: '#000000',
-    fontSize: 30,
-    lineHeight: 36,
+    ...AppTypography.pageTitle,
     fontWeight: '700',
   },
   monthButtons: {

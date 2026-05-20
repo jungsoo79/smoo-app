@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import { Calendar, type DateData } from 'react-native-calendars';
 
 import { AppBottomNav, AppFloatingActionButton, AppTopBar } from '@/components/app-chrome';
+import { AppColors, AppTypography } from '@/constants/appStyles';
 import { AddSheet } from '@/features/calendar/components/AddSheet';
 
 type ChipTone = 'light' | 'medium' | 'darkGray' | 'black' | 'red';
@@ -398,9 +399,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   monthTitle: {
-    color: '#000000',
-    fontSize: 30,
-    lineHeight: 36,
+    ...AppTypography.pageTitle,
     fontWeight: '700',
   },
   monthButtons: {
@@ -514,15 +513,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   scheduleTitle: {
-    color: '#000000',
-    fontSize: 20,
-    lineHeight: 28,
-    fontWeight: '700',
+    ...AppTypography.sectionTitle,
   },
   scheduleCount: {
-    color: '#A3A3A3',
-    fontSize: 12,
-    lineHeight: 16,
+    ...AppTypography.caption,
+    color: AppColors.textPlaceholder,
     fontWeight: '500',
   },
   eventList: {

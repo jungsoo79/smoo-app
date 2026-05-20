@@ -1,5 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
+import { AppColors, AppTypography } from '@/constants/appStyles';
+
 import type { TransactionWithMeta } from '../types';
 import { formatSelectedDateTitle, formatSignedWon } from './formatters';
 
@@ -62,15 +64,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   date: {
-    color: '#000000',
-    fontSize: 20,
-    lineHeight: 28,
-    fontWeight: '700',
+    ...AppTypography.sectionTitle,
   },
   count: {
-    color: '#737373',
-    fontSize: 12,
-    lineHeight: 16,
+    ...AppTypography.caption,
+    color: AppColors.textMuted,
     fontWeight: '600',
   },
   list: {
