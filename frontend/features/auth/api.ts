@@ -20,6 +20,10 @@ export type SignupResponse = {
   email: string;
 };
 
+export type VerifyEmailResponse = {
+  message: string;
+};
+
 async function postJson<TResponse>(path: string, body: unknown): Promise<TResponse> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     method: 'POST',
@@ -47,3 +51,6 @@ export function signup(email: string, password: string) {
   return postJson<SignupResponse>('/auth/signup', { email, password });
 }
 
+export function verifyEmail(email: string, token: string) {
+  return postJson<VerifyEmailResponse>('/auth/verify-email', { email, token });
+}
