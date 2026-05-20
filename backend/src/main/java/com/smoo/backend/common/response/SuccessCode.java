@@ -10,7 +10,10 @@ public enum SuccessCode {
     DELETED(HttpStatus.OK, "DELETED", "데이터가 성공적으로 삭제되었습니다."),
 
     LOGIN_SUCCESS(HttpStatus.OK, "LOGIN_SUCCESS", "로그인이 완료되었습니다."),
-    SIGNUP_SUCCESS(HttpStatus.CREATED, "SIGNUP_SUCCESS", "회원가입이 완료되었습니다.");
+    SIGNUP_SUCCESS(HttpStatus.CREATED, "SIGNUP_SUCCESS", "회원가입이 완료되었습니다."),
+    LOGOUT_SUCCESS(HttpStatus.OK, "LOGOUT_SUCCESS", "로그아웃이 완료되었습니다."),
+    VERIFY_EMAIL_SUCCESS(HttpStatus.OK, "VERIFY_EMAIL_SUCCESS", "이메일 인증이 완료되었습니다."),
+    REFRESH_SUCCESS(HttpStatus.OK, "REFRESH_SUCCESS", "토큰이 갱신되었습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
