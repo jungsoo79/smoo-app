@@ -6,7 +6,6 @@ services:
     container_name: smoo-backend
     env_file:
       - ./backend/.env
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
     ports:
       - "8080:8080"
+    restart: unless-stopped

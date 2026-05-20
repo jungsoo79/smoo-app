@@ -1,17 +1,13 @@
 spring:
   application:
     name: backend
+
   profiles:
-    active: local
+    default: local
 
 server:
-  port: 8080
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
+  port: ${PORT:8080}
+  address: 0.0.0.0
 
 supabase:
   url: ${SUPABASE_URL}

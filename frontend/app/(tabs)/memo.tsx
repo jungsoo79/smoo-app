@@ -3,47 +3,13 @@ import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 
 
 import { AppBottomNav, AppFloatingActionButton, AppTopBar } from '@/components/app-chrome';
 
-const memos = [
-  {
-    category: '카테고리',
-    date: '2026년 3월 31일',
-    title: '제목',
-    body: ['Milk, Eggs, Bread, Organic Kale,', 'Almond butter, Greek yogurt...'],
-    progress: true,
-  },
-  {
-    category: '카테고리',
-    date: '2025년 2월 11일',
-    title: '제목',
-    body: [
-      'New app features, UI improvements',
-      'for the Glassy engine, and potential',
-      'dark mode overhaul for Smoo.',
-    ],
-    collaborators: true,
-  },
-  {
-    category: '카테고리',
-    date: '2025년 1월 3일',
-    title: 'Meeting Notes',
-    body: [
-      'Next steps for the Smoo project.',
-      'Finalize the Glassmorphism specs,',
-      'review color tokens, and approve',
-      'the new typography scale.',
-    ],
-    attachment: 'smoo_specs_v2.pdf',
-  },
-  {
-    category: 'Personal',
-    date: '2022년 12월 12일',
-    title: 'Weekend Trip',
-    body: ['Check flight availability and hotel...'],
-    muted: true,
-  },
-];
+import { useState } from 'react';
+import { memos } from '@/constants/memoMockData';
+
 
 export default function MemoScreen() {
+  const [searchText, setSearchText] = useState('');
+
   return (
     <View style={styles.screen}>
       <View style={styles.safeArea}>
@@ -56,21 +22,32 @@ export default function MemoScreen() {
           <View style={styles.searchSection}>
             <MaterialIcons name="search" size={19} color="rgba(161, 161, 170, 0.6)" style={styles.searchIcon} />
             <TextInput
-              placeholder="검색"
-              placeholderTextColor="rgba(161, 161, 170, 0.6)"
-              style={styles.searchInput}
+            placeholder="검색"
+            placeholderTextColor="rgba(161, 161, 170, 0.6)"
+            style={styles.searchInput}
+            value={searchText}
+            onChangeText={setSearchText}
             />
+
           </View>
 
           <View style={styles.memoList}>
-            {memos.map((memo) => (
-              <MemoCard key={`${memo.title}-${memo.date}`} memo={memo} />
-            ))}
+           {memos
+           .filter(
+            (memo) =>
+              memo.title.toLowerCase().includes(searchText.toLowerCase()) ||
+            memo.body.join(' ').toLowerCase().includes(searchText.toLowerCase())
+          )
+          .map((memo) => (
+          <MemoCard key={`${memo.title}-${memo.date}`} memo={memo} />
+          ))}
           </View>
         </ScrollView>
       </View>
 
-      <AppFloatingActionButton label="메모 추가" />
+      <AppFloatingActionButton
+      label="메모 추가"onPress={() => alert('메모 작성 화면 연결 예정')}
+      />
 
       <AppBottomNav active="memo" />
     </View>
