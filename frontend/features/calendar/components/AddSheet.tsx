@@ -17,8 +17,8 @@ import {
   type LayoutRectangle,
 } from 'react-native';
 
-import { CategoryAddModal } from '@/components/category-add-modal';
-import { DatePickerPopup } from '@/components/date-picker-popup';
+import { CategoryAddModal } from '@/components/shared/CategoryAddModal';
+import { DatePickerPopup } from '@/components/shared/DatePickerPopup';
 
 type AddSheetProps = {
   initialDate?: string;
