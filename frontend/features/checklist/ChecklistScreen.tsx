@@ -2,6 +2,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  FlatList,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   ScrollView,
@@ -9,6 +10,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import DraggableFlatList, { type RenderItemParams } from 'react-native-draggable-flatlist';
 
@@ -48,12 +50,28 @@ function getDateOptions(startOffset: number, endOffset: number) {
   });
 }
 
+function getVisibleDateCount(viewportWidth: number) {
+  if (viewportWidth < 340) {
+    return 3;
+  }
+
+  if (viewportWidth < 500) {
+    return 5;
+  }
+
+  const count = Math.max(5, Math.floor(viewportWidth / 92));
+
+  return count % 2 === 0 ? count - 1 : count;
+}
+
 const todayString = toLocalDateString(new Date());
-const datePillSlotWidth = 80;
-const dateRangeChunk = 180;
-const initialDateRange = {
-  startOffset: -365,
-  endOffset: 365,
+const dateRangeStartOffset = -730;
+const dateRangeEndOffset = 730;
+
+type DateOption = {
+  dateString: string;
+  day: string;
+  weekday: string;
 };
 
 type Task = {
@@ -74,35 +92,51 @@ type TaskSectionsByDate = Record<string, TaskSection[]>;
 const initialTaskSectionsByDate: TaskSectionsByDate = {};
 
 export default function ChecklistScreen() {
-  const datePickerRef = useRef<ScrollView>(null);
-  const didInitialDateScroll = useRef(false);
+  const { width: viewportWidth } = useWindowDimensions();
+  const datePickerRef = useRef<FlatList<DateOption>>(null);
   const monthLabelOpacity = useRef(new Animated.Value(0)).current;
   const monthLabelHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isAddSheetVisible, setAddSheetVisible] = useState(false);
-  const [dateRange, setDateRange] = useState(initialDateRange);
   const [taskSectionsByDate, setTaskSectionsByDate] = useState(initialTaskSectionsByDate);
   const [selectedDate, setSelectedDate] = useState(todayString);
   const [scrollMonthLabel, setScrollMonthLabel] = useState(getMonthLabel(todayString));
-  const dateOptions = useMemo(
-    () => getDateOptions(dateRange.startOffset, dateRange.endOffset),
-    [dateRange.endOffset, dateRange.startOffset]
-  );
-  const todayOptionIndex = -dateRange.startOffset;
+  const dateOptions = useMemo(() => getDateOptions(dateRangeStartOffset, dateRangeEndOffset), []);
   const taskSections = taskSectionsByDate[selectedDate] ?? [];
+  const safeViewportWidth = Math.max(viewportWidth, 320);
+  const visibleDateCount = getVisibleDateCount(safeViewportWidth);
+  const sideDateCount = Math.floor(visibleDateCount / 2);
+  const datePillSlotWidth = Math.max(1, safeViewportWidth / visibleDateCount);
+
+  const scrollToSelectedDate = useCallback(
+    (dateString: string, animated: boolean) => {
+      const selectedIndex = dateOptions.findIndex((date) => date.dateString === dateString);
+
+      if (selectedIndex < 0) {
+        return;
+      }
+
+      datePickerRef.current?.scrollToOffset({
+        animated,
+        offset: Math.max(0, (selectedIndex - sideDateCount) * datePillSlotWidth),
+      });
+    },
+    [dateOptions, datePillSlotWidth, sideDateCount]
+  );
+
+  const getDateItemLayout = useCallback(
+    (_: ArrayLike<DateOption> | null | undefined, index: number) => ({
+      index,
+      length: datePillSlotWidth,
+      offset: datePillSlotWidth * index,
+    }),
+    [datePillSlotWidth]
+  );
 
   useEffect(() => {
-    if (didInitialDateScroll.current) {
-      return;
-    }
-
-    didInitialDateScroll.current = true;
     requestAnimationFrame(() => {
-      datePickerRef.current?.scrollTo({
-        animated: false,
-        x: Math.max(0, todayOptionIndex * datePillSlotWidth - datePillSlotWidth * 2),
-      });
+      scrollToSelectedDate(selectedDate, false);
     });
-  }, [todayOptionIndex]);
+  }, [scrollToSelectedDate, selectedDate]);
 
   useEffect(() => {
     return () => {
@@ -138,10 +172,29 @@ export default function ChecklistScreen() {
     }, 260);
   }, [monthLabelOpacity]);
 
+  const selectDate = useCallback(
+    (dateString: string) => {
+      setSelectedDate(dateString);
+      setScrollMonthLabel(getMonthLabel(dateString));
+      scrollToSelectedDate(dateString, true);
+      showMonthLabel();
+      hideMonthLabelSoon();
+    },
+    [hideMonthLabelSoon, scrollToSelectedDate, showMonthLabel]
+  );
+
+  const getCenteredDateFromScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const centerIndex = Math.round(event.nativeEvent.contentOffset.x / datePillSlotWidth) + sideDateCount;
+
+      return dateOptions[Math.max(0, Math.min(dateOptions.length - 1, centerIndex))];
+    },
+    [dateOptions, datePillSlotWidth, sideDateCount]
+  );
+
   const handleDateScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const centerDateIndex = Math.round(event.nativeEvent.contentOffset.x / datePillSlotWidth) + 2;
-      const centerDate = dateOptions[centerDateIndex];
+      const centerDate = getCenteredDateFromScroll(event);
 
       if (!centerDate) {
         return;
@@ -155,38 +208,23 @@ export default function ChecklistScreen() {
         return currentMonth === nextMonth ? currentMonth : nextMonth;
       });
     },
-    [dateOptions, hideMonthLabelSoon, showMonthLabel]
+    [getCenteredDateFromScroll, hideMonthLabelSoon, showMonthLabel]
   );
 
-  const handleDateScrollEnd = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    const leftThreshold = datePillSlotWidth * 4;
-    const rightThreshold = datePillSlotWidth * 4;
+  const handleDateScrollEnd = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const centerDate = getCenteredDateFromScroll(event);
 
-    if (contentOffset.x < leftThreshold) {
+      if (centerDate) {
+        setSelectedDate(centerDate.dateString);
+        setScrollMonthLabel(getMonthLabel(centerDate.dateString));
+        scrollToSelectedDate(centerDate.dateString, true);
+      }
+
       hideMonthLabelSoon();
-      setDateRange((range) => ({
-        ...range,
-        startOffset: range.startOffset - dateRangeChunk,
-      }));
-      requestAnimationFrame(() => {
-        datePickerRef.current?.scrollTo({
-          animated: false,
-          x: contentOffset.x + dateRangeChunk * datePillSlotWidth,
-        });
-      });
-      return;
-    }
-
-    if (contentSize.width - layoutMeasurement.width - contentOffset.x < rightThreshold) {
-      setDateRange((range) => ({
-        ...range,
-        endOffset: range.endOffset + dateRangeChunk,
-      }));
-    }
-
-    hideMonthLabelSoon();
-  }, [hideMonthLabelSoon]);
+    },
+    [getCenteredDateFromScroll, hideMonthLabelSoon, scrollToSelectedDate]
+  );
 
   const toggleTaskDone = useCallback((sectionTitle: string, taskId: string) => {
     setTaskSectionsByDate((sectionsByDate) => {
@@ -233,6 +271,13 @@ export default function ChecklistScreen() {
     });
   }, [selectedDate]);
 
+  const updateTaskSections = useCallback((sections: TaskSection[]) => {
+    setTaskSectionsByDate((sectionsByDate) => ({
+      ...sectionsByDate,
+      [selectedDate]: sections,
+    }));
+  }, [selectedDate]);
+
   const saveTodo = useCallback(
     ({
       category,
@@ -276,16 +321,13 @@ export default function ChecklistScreen() {
               ],
         };
       });
-      setSelectedDate(date);
+      selectDate(date);
     },
-    []
+    [selectDate]
   );
 
   return (
     <View style={styles.screen}>
-      <View style={styles.blurTop} />
-      <View style={styles.blurBottom} />
-
       <View style={styles.safeArea}>
         <AppTopBar title="할 일" />
 
@@ -300,26 +342,27 @@ export default function ChecklistScreen() {
               {scrollMonthLabel}
             </Animated.Text>
 
-            <ScrollView
+            <FlatList
               ref={datePickerRef}
+              data={dateOptions}
               horizontal
               bounces={false}
+              contentContainerStyle={styles.datePicker}
               decelerationRate="fast"
+              getItemLayout={getDateItemLayout}
+              initialNumToRender={visibleDateCount + 4}
+              keyExtractor={(date) => date.dateString}
+              maxToRenderPerBatch={visibleDateCount + 4}
               onMomentumScrollEnd={handleDateScrollEnd}
               onScroll={handleDateScroll}
-              scrollEventThrottle={16}
-              showsHorizontalScrollIndicator={false}
-              snapToInterval={datePillSlotWidth}
-              snapToAlignment="start"
-              contentContainerStyle={styles.datePicker}>
-              {dateOptions.map((date) => {
+              renderItem={({ item: date }) => {
                 const isActive = date.dateString === selectedDate;
 
                 return (
-                  <View key={date.dateString} style={styles.datePillSlot}>
+                  <View style={[styles.datePillSlot, { width: datePillSlotWidth }]}>
                     <TouchableOpacity
                       activeOpacity={0.8}
-                      onPress={() => setSelectedDate(date.dateString)}
+                      onPress={() => selectDate(date.dateString)}
                       style={[styles.datePill, isActive && styles.datePillActive]}>
                       <Text style={[styles.dateWeekday, isActive && styles.dateWeekdayActive]}>
                         {date.weekday}
@@ -330,8 +373,13 @@ export default function ChecklistScreen() {
                     </TouchableOpacity>
                   </View>
                 );
-              })}
-            </ScrollView>
+              }}
+              scrollEventThrottle={16}
+              showsHorizontalScrollIndicator={false}
+              snapToInterval={datePillSlotWidth}
+              snapToAlignment="start"
+              windowSize={5}
+            />
           </View>
 
           <View style={styles.taskGroups}>
@@ -341,32 +389,22 @@ export default function ChecklistScreen() {
               </View>
             ) : null}
 
-            {taskSections.map((section) => (
-              <View key={section.title} style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <View style={styles.sectionBadge}>
-                    <Text style={styles.sectionBadgeText}>{section.title}</Text>
-                  </View>
-                  <View style={styles.sectionDivider} />
-                </View>
-
-                <DraggableFlatList
-                  activationDistance={8}
-                  containerStyle={styles.taskList}
-                  data={section.tasks}
-                  ItemSeparatorComponent={() => <View style={styles.taskSeparator} />}
-                  keyExtractor={(item) => item.id}
-                  onDragEnd={({ data }) => updateSectionTasks(section.title, data)}
-                  renderItem={(params) => (
-                    <TaskCard
-                      {...params}
-                      onToggle={() => toggleTaskDone(section.title, params.item.id)}
-                    />
-                  )}
-                  scrollEnabled={false}
+            <DraggableFlatList
+              activationDistance={8}
+              containerStyle={styles.sectionList}
+              data={taskSections}
+              ItemSeparatorComponent={() => <View style={styles.sectionSeparator} />}
+              keyExtractor={(item) => item.title}
+              onDragEnd={({ data }) => updateTaskSections(data)}
+              renderItem={(params) => (
+                <TaskSectionBlock
+                  {...params}
+                  onToggleTask={toggleTaskDone}
+                  onUpdateTasks={updateSectionTasks}
                 />
-              </View>
-            ))}
+              )}
+              scrollEnabled={false}
+            />
           </View>
         </ScrollView>
       </View>
@@ -425,46 +463,64 @@ function TaskCard({
   );
 }
 
+function TaskSectionBlock({
+  drag,
+  isActive,
+  item: section,
+  onToggleTask,
+  onUpdateTasks,
+}: RenderItemParams<TaskSection> & {
+  onToggleTask: (sectionTitle: string, taskId: string) => void;
+  onUpdateTasks: (sectionTitle: string, tasks: Task[]) => void;
+}) {
+  return (
+    <View style={[styles.section, isActive && styles.sectionActive]}>
+      <View style={styles.sectionHeader}>
+        <View style={styles.sectionBadge}>
+          <Text style={styles.sectionBadgeText}>{section.title}</Text>
+        </View>
+        <View style={styles.sectionDivider} />
+        <TouchableOpacity
+          accessibilityLabel={`${section.title} 카테고리 순서 변경`}
+          activeOpacity={0.7}
+          delayLongPress={80}
+          onLongPress={drag}
+          style={styles.sectionDragHandle}>
+          <MaterialIcons name="drag-indicator" size={18} color="rgba(71, 71, 71, 0.32)" />
+        </TouchableOpacity>
+      </View>
+
+      <DraggableFlatList
+        activationDistance={8}
+        containerStyle={styles.taskList}
+        data={section.tasks}
+        ItemSeparatorComponent={() => <View style={styles.taskSeparator} />}
+        keyExtractor={(item) => item.id}
+        onDragEnd={({ data }) => onUpdateTasks(section.title, data)}
+        renderItem={(params) => (
+          <TaskCard
+            {...params}
+            onToggle={() => onToggleTask(section.title, params.item.id)}
+          />
+        )}
+        scrollEnabled={false}
+      />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: '#F8F9FA',
-  },
-  blurTop: {
-    position: 'absolute',
-    top: -104,
-    right: -39,
-    width: 195,
-    height: 519,
-    borderRadius: 999,
-    backgroundColor: 'rgba(231, 232, 233, 0.4)',
-    shadowColor: '#E7E8E9',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.7,
-    shadowRadius: 60,
-  },
-  blurBottom: {
-    position: 'absolute',
-    left: -20,
-    bottom: -52,
-    width: 156,
-    height: 415,
-    borderRadius: 999,
-    backgroundColor: 'rgba(217, 218, 219, 0.3)',
-    shadowColor: '#D9DADB',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.7,
-    shadowRadius: 50,
   },
   safeArea: {
     flex: 1,
   },
   content: {
     width: '100%',
-    maxWidth: 448,
-    alignSelf: 'center',
     paddingTop: 28,
-    paddingHorizontal: 24,
+    paddingHorizontal: 0,
     paddingBottom: 176,
     gap: 48,
   },
@@ -494,7 +550,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
   },
   datePillSlot: {
-    width: datePillSlotWidth,
     height: 92,
     alignItems: 'center',
     justifyContent: 'center',
@@ -540,7 +595,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   taskGroups: {
-    gap: 40,
+    paddingHorizontal: 24,
   },
   emptyTasks: {
     minHeight: 88,
@@ -558,11 +613,22 @@ const styles = StyleSheet.create({
   section: {
     gap: 16,
   },
+  sectionActive: {
+    opacity: 0.96,
+    transform: [{ scale: 1.01 }],
+  },
+  sectionList: {
+    gap: 0,
+  },
+  sectionSeparator: {
+    height: 40,
+  },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 8,
+    gap: 10,
+    paddingLeft: 8,
+    paddingRight: 0,
   },
   sectionBadge: {
     paddingHorizontal: 12,
@@ -581,6 +647,12 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 1,
     backgroundColor: 'rgba(225, 227, 228, 0.5)',
+  },
+  sectionDragHandle: {
+    width: 32,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   taskList: {
     gap: 0,

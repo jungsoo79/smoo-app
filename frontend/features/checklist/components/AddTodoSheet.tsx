@@ -57,6 +57,7 @@ export function AddTodoSheet({ initialDate, visible, onClose, onSave }: AddTodoS
   const [isCategoryPickerVisible, setCategoryPickerVisible] = useState(false);
   const [isCategoryAddVisible, setCategoryAddVisible] = useState(false);
   const [optionAnchor, setOptionAnchor] = useState<LayoutRectangle | null>(null);
+  const [didTrySubmit, setDidTrySubmit] = useState(false);
 
   const categoryPickerOptions = useMemo<PickerOption[]>(
     () => [
@@ -89,6 +90,7 @@ export function AddTodoSheet({ initialDate, visible, onClose, onSave }: AddTodoS
       setTitle('');
       setMemo('');
       setCategory('없음');
+      setDidTrySubmit(false);
     }
   }, [initialDate, visible]);
 
@@ -135,8 +137,12 @@ export function AddTodoSheet({ initialDate, visible, onClose, onSave }: AddTodoS
 
   const handleSave = useCallback(() => {
     const nextTitle = title.trim();
+    const isCategorySelected = category !== '없음';
+    const isDateSelected = Boolean(selectedDate);
 
-    if (!nextTitle) {
+    setDidTrySubmit(true);
+
+    if (!nextTitle || !isDateSelected || !isCategorySelected) {
       return;
     }
 
@@ -148,6 +154,10 @@ export function AddTodoSheet({ initialDate, visible, onClose, onSave }: AddTodoS
     });
     closeWithAnimation();
   }, [category, closeWithAnimation, memo, onSave, selectedDate, title]);
+
+  const isTitleInvalid = didTrySubmit && !title.trim();
+  const isDateInvalid = didTrySubmit && !selectedDate;
+  const isCategoryInvalid = didTrySubmit && category === '없음';
 
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={closeWithAnimation}>
@@ -167,7 +177,7 @@ export function AddTodoSheet({ initialDate, visible, onClose, onSave }: AddTodoS
             bounces={false}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.sheetContent}>
-            <View style={styles.todoInputCard}>
+            <View style={[styles.todoInputCard, isTitleInvalid && styles.invalidBlock]}>
               <TextInput
                 placeholder="할 일을 작성해 주세요."
                 placeholderTextColor="#A6AAAC"
@@ -188,6 +198,7 @@ export function AddTodoSheet({ initialDate, visible, onClose, onSave }: AddTodoS
 
             <View style={styles.todoOptionGroup}>
               <TodoOptionRow
+                isInvalid={isDateInvalid}
                 icon="calendar-today"
                 onPress={() => setDatePickerVisible(true)}
                 title="Date"
@@ -195,6 +206,7 @@ export function AddTodoSheet({ initialDate, visible, onClose, onSave }: AddTodoS
               />
               <View style={styles.todoOptionDivider} />
               <TodoOptionRow
+                isInvalid={isCategoryInvalid}
                 rowRef={categoryRowRef}
                 icon="tag-faces"
                 onPress={openCategoryPicker}
@@ -213,6 +225,7 @@ export function AddTodoSheet({ initialDate, visible, onClose, onSave }: AddTodoS
           onClose={() => setDatePickerVisible(false)}
           onSelect={(dateString) => {
             setSelectedDate(dateString);
+            setDidTrySubmit(false);
             setDatePickerVisible(false);
           }}
           selectedDate={selectedDate}
@@ -231,6 +244,7 @@ export function AddTodoSheet({ initialDate, visible, onClose, onSave }: AddTodoS
               return [...options, nextCategory];
             });
             setCategory(nextCategory.label);
+            setDidTrySubmit(false);
           }}
         />
 
@@ -239,6 +253,7 @@ export function AddTodoSheet({ initialDate, visible, onClose, onSave }: AddTodoS
           onClose={() => setCategoryPickerVisible(false)}
           onSelect={(value) => {
             setCategory(value);
+            setDidTrySubmit(false);
             setCategoryPickerVisible(false);
           }}
           options={categoryPickerOptions}
@@ -253,19 +268,25 @@ export function AddTodoSheet({ initialDate, visible, onClose, onSave }: AddTodoS
 
 function TodoOptionRow({
   icon,
+  isInvalid = false,
   onPress,
   rowRef,
   title,
   value,
 }: {
   icon: keyof typeof MaterialIcons.glyphMap;
+  isInvalid?: boolean;
   onPress: () => void;
   rowRef?: RefObject<View | null>;
   title: string;
   value?: string;
 }) {
   return (
-    <TouchableOpacity ref={rowRef} activeOpacity={0.78} onPress={onPress} style={styles.todoOptionRow}>
+    <TouchableOpacity
+      ref={rowRef}
+      activeOpacity={0.78}
+      onPress={onPress}
+      style={[styles.todoOptionRow, isInvalid && styles.invalidRow]}>
       <View style={styles.todoOptionTitleGroup}>
         <MaterialIcons name={icon} size={18} color="#9BA0A3" />
         <Text style={styles.todoOptionTitle}>{title}</Text>
@@ -406,10 +427,16 @@ const styles = StyleSheet.create({
   todoInputCard: {
     minHeight: 106,
     borderRadius: 34,
+    borderWidth: 1,
+    borderColor: 'transparent',
     paddingHorizontal: 20,
     paddingTop: 18,
     paddingBottom: 16,
     backgroundColor: '#FFFFFF',
+  },
+  invalidBlock: {
+    borderColor: 'rgba(156, 69, 69, 0.34)',
+    backgroundColor: '#FFF8F8',
   },
   todoTitleInput: {
     height: 30,
@@ -442,10 +469,14 @@ const styles = StyleSheet.create({
   },
   todoOptionRow: {
     height: 54,
+    borderRadius: 24,
     paddingHorizontal: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  invalidRow: {
+    backgroundColor: '#FFF8F8',
   },
   todoOptionTitleGroup: {
     flexDirection: 'row',

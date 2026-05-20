@@ -111,6 +111,7 @@ export function AddSheet({ initialDate, visible, onClose, onSave }: AddSheetProp
   const [endDate, setEndDate] = useState(initialEventDate);
   const [startTime, setStartTime] = useState(getInitialTime);
   const [endTime, setEndTime] = useState(getInitialTime);
+  const [dateError, setDateError] = useState('');
   const [pickerTarget, setPickerTarget] = useState<DateTarget | null>(null);
   const [timePickerTarget, setTimePickerTarget] = useState<TimeTarget | null>(null);
   const [openOptionMenu, setOpenOptionMenu] = useState<OptionMenu | null>(null);
@@ -144,6 +145,7 @@ export function AddSheet({ initialDate, visible, onClose, onSave }: AddSheetProp
       setEndDate(nextDate);
       setStartTime(getInitialTime());
       setEndTime(getInitialTime());
+      setDateError('');
       setRepeat('없음');
       setCategory('없음');
       setAlert('없음');
@@ -233,6 +235,8 @@ export function AddSheet({ initialDate, visible, onClose, onSave }: AddSheetProp
 
   const selectDate = useCallback(
     (dateString: string) => {
+      setDateError('');
+
       if (pickerTarget === 'end') {
         setEndDate(dateString);
       } else {
@@ -271,6 +275,11 @@ export function AddSheet({ initialDate, visible, onClose, onSave }: AddSheetProp
     const nextTitle = title.trim();
 
     if (!nextTitle) {
+      return;
+    }
+
+    if (startDate > endDate) {
+      setDateError('시작 날짜가 종료 날짜보다 늦을 수 없습니다.');
       return;
     }
 
@@ -358,6 +367,8 @@ export function AddSheet({ initialDate, visible, onClose, onSave }: AddSheetProp
               time={endTime}
               title="종료"
             />
+
+            {dateError ? <Text style={styles.dateErrorText}>{dateError}</Text> : null}
 
             <OptionRow
               rowRef={repeatRowRef}
@@ -804,6 +815,14 @@ const styles = StyleSheet.create({
   timePillText: { color: '#474747', fontSize: 14, lineHeight: 20, fontWeight: '500' },
   timePillTextDisabled: {
     color: '#A3A3A3',
+  },
+  dateErrorText: {
+    marginTop: -4,
+    paddingHorizontal: 4,
+    color: '#EF4444',
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '600',
   },
   timePickerLayer: {
     flex: 1,

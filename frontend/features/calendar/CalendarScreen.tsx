@@ -8,7 +8,8 @@ import { AppColors, AppTypography } from '@/constants/appStyles';
 import { AddSheet } from '@/features/calendar/components/AddSheet';
 
 type ChipTone = 'light' | 'medium' | 'darkGray' | 'black' | 'red';
-type CalendarChip = { color?: string; label: string; tone: ChipTone };
+type CalendarChipSegment = 'single' | 'start' | 'middle' | 'end';
+type CalendarChip = { color?: string; id?: string; label: string; segment: CalendarChipSegment; tone: ChipTone };
 
 function toLocalDateString(date: Date) {
   return [
@@ -36,21 +37,48 @@ type CalendarEvent = {
   title: string;
 };
 
+type CalendarEventOccurrence = CalendarEvent & {
+  displayIsAllDay: boolean;
+  displayTime: CalendarEvent['startTime'];
+};
+
 type EventsByDate = Record<string, CalendarEvent[]>;
 
 function addMonths(dateString: string, count: number) {
   const date = new Date(`${dateString}T00:00:00`);
   date.setMonth(date.getMonth() + count);
+
   return toLocalDateString(date);
+}
+
+function addDays(dateString: string, count: number) {
+  const date = new Date(`${dateString}T00:00:00`);
+  date.setDate(date.getDate() + count);
+
+  return toLocalDateString(date);
+}
+
+function getDatesBetween(startDate: string, endDate: string) {
+  const dates: string[] = [];
+  let currentDate = startDate;
+
+  while (currentDate <= endDate) {
+    dates.push(currentDate);
+    currentDate = addDays(currentDate, 1);
+  }
+
+  return dates;
 }
 
 function formatMonthTitle(dateString: string) {
   const date = new Date(`${dateString}T00:00:00`);
+
   return `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
 }
 
 function formatSelectedTitle(dateString: string) {
   const date = new Date(`${dateString}T00:00:00`);
+
   return `${date.getMonth() + 1}월 ${date.getDate()}일 ${koreanWeekdays[date.getDay()]}`;
 }
 
@@ -69,12 +97,26 @@ function getTimeOrder(time: CalendarEvent['startTime']) {
   return (hour + meridiemOffset) * 60 + time.minute;
 }
 
-function sortCalendarEvents(first: CalendarEvent, second: CalendarEvent) {
-  if (first.isAllDay !== second.isAllDay) {
-    return first.isAllDay ? -1 : 1;
+function getEventOccurrence(event: CalendarEvent, dateString: string): CalendarEventOccurrence {
+  const isStartDate = dateString === event.date;
+  const isEndDate = dateString === event.endDate;
+  const isMiddleDate = dateString > event.date && dateString < event.endDate;
+  const displayIsAllDay = event.isAllDay || isMiddleDate;
+  const displayTime = !event.isAllDay && isEndDate && !isStartDate ? event.endTime : event.startTime;
+
+  return {
+    ...event,
+    displayIsAllDay,
+    displayTime,
+  };
+}
+
+function sortCalendarEvents(first: CalendarEventOccurrence, second: CalendarEventOccurrence) {
+  if (first.displayIsAllDay !== second.displayIsAllDay) {
+    return first.displayIsAllDay ? -1 : 1;
   }
 
-  return getTimeOrder(first.startTime) - getTimeOrder(second.startTime);
+  return getTimeOrder(first.displayTime) - getTimeOrder(second.displayTime);
 }
 
 function getChipTone(index: number): ChipTone {
@@ -89,26 +131,101 @@ function getChipTone(index: number): ChipTone {
   return 'darkGray';
 }
 
-function getCalendarChips(events: CalendarEvent[]): CalendarChip[] {
-  if (events.length > 3) {
-    return [
-      ...events.slice(0, 2).map((event, index) => ({
-        color: event.categoryColor,
-        label: event.title,
-        tone: getChipTone(index),
-      })),
-      {
-        label: `+ ${events.length - 2}개`,
-        tone: 'medium' as ChipTone,
-      },
-    ];
+function getCalendarChipSegment(event: CalendarEvent, dateString: string): CalendarChipSegment {
+  if (event.date === event.endDate) {
+    return 'single';
   }
 
-  return events.slice(0, 3).map((event, index) => ({
+  if (dateString === event.date) {
+    return 'start';
+  }
+
+  if (dateString === event.endDate) {
+    return 'end';
+  }
+
+  return 'middle';
+}
+
+function getRangeLength(event: CalendarEvent) {
+  return getDatesBetween(event.date, event.endDate).length;
+}
+
+function getCalendarChip(event: CalendarEvent, dateString: string, index: number): CalendarChip {
+  const segment = getCalendarChipSegment(event, dateString);
+
+  return {
     color: event.categoryColor,
-    label: event.title,
+    id: event.id,
+    label: segment === 'single' || segment === 'start' ? event.title : ' ',
+    segment,
     tone: getChipTone(index),
-  }));
+  };
+}
+
+function getCalendarChipsByDate(eventsByDate: EventsByDate): Record<string, Array<CalendarChip | null>> {
+  const uniqueEvents = Array.from(
+    new Map(Object.values(eventsByDate).flat().map((event) => [event.id, event])).values()
+  ).sort((first, second) => {
+    const firstIsRange = first.date !== first.endDate;
+    const secondIsRange = second.date !== second.endDate;
+
+    if (firstIsRange !== secondIsRange) {
+      return firstIsRange ? -1 : 1;
+    }
+
+    if (first.date !== second.date) {
+      return first.date.localeCompare(second.date);
+    }
+
+    if (getRangeLength(first) !== getRangeLength(second)) {
+      return getRangeLength(second) - getRangeLength(first);
+    }
+
+    return getTimeOrder(first.startTime) - getTimeOrder(second.startTime);
+  });
+  const lanesByDate: Record<string, Array<CalendarChip | null>> = {};
+  const totalsByDate = Object.fromEntries(
+    Object.entries(eventsByDate).map(([date, events]) => [date, events.length])
+  ) as Record<string, number>;
+
+  uniqueEvents.forEach((event) => {
+    const dates = getDatesBetween(event.date, event.endDate);
+    const availableLane = [0, 1, 2].find((lane) => dates.every((date) => !lanesByDate[date]?.[lane]));
+
+    if (availableLane === undefined) {
+      return;
+    }
+
+    dates.forEach((date) => {
+      lanesByDate[date] = lanesByDate[date] ?? [];
+      lanesByDate[date][availableLane] = getCalendarChip(event, date, availableLane);
+    });
+  });
+
+  return Object.fromEntries(
+    Object.entries(eventsByDate).map(([date]) => {
+      const chips = lanesByDate[date] ?? [];
+      const total = totalsByDate[date] ?? 0;
+
+      if (total > 3) {
+        return [
+          date,
+          [
+            chips[0] ?? null,
+            chips[1] ?? null,
+            {
+              label: `+ ${total - 2}개`,
+              segment: 'single' as CalendarChipSegment,
+              tone: 'medium' as ChipTone,
+            },
+          ],
+        ];
+      }
+
+      return [date, Array.from({ length: Math.min(3, chips.length) }, (_, index) => chips[index] ?? null)];
+    })
+  );
 }
 
 function getContrastTextColor(hexColor?: string) {
@@ -138,17 +255,11 @@ export default function CalendarScreen() {
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [eventsByDate, setEventsByDate] = useState<EventsByDate>({});
   const [isAddSheetVisible, setAddSheetVisible] = useState(false);
-  const selectedEvents = eventsByDate[selectedDate] ?? [];
-  const calendarChips = useMemo(
-    () =>
-      Object.fromEntries(
-        Object.entries(eventsByDate).map(([date, events]) => [
-          date,
-          getCalendarChips(events),
-        ])
-      ),
-    [eventsByDate]
+  const selectedEvents = useMemo(
+    () => (eventsByDate[selectedDate] ?? []).map((event) => getEventOccurrence(event, selectedDate)).sort(sortCalendarEvents),
+    [eventsByDate, selectedDate]
   );
+  const calendarChips = useMemo(() => getCalendarChipsByDate(eventsByDate), [eventsByDate]);
 
   const markedDates = useMemo(
     () => ({
@@ -263,8 +374,15 @@ export default function CalendarScreen() {
 
           setEventsByDate((events) => ({
             ...events,
-            [event.date]: [...(events[event.date] ?? []), nextEvent].sort(sortCalendarEvents),
-          }));
+            ...Object.fromEntries(
+              getDatesBetween(event.date, event.endDate).map((date) => [
+                date,
+                [...(events[date] ?? []), nextEvent].sort((first, second) =>
+                  sortCalendarEvents(getEventOccurrence(first, date), getEventOccurrence(second, date))
+                ),
+              ])
+            ),
+          } as EventsByDate));
           setSelectedDate(event.date);
           setCurrentDate(event.date);
         }}
@@ -275,23 +393,23 @@ export default function CalendarScreen() {
   );
 }
 
-function CalendarEventRow({ event }: { event: CalendarEvent }) {
+function CalendarEventRow({ event }: { event: CalendarEventOccurrence }) {
   const titleColor = getContrastTextColor(event.categoryColor);
   const detailColor = getMutedContrastTextColor(event.categoryColor);
 
   return (
-    <View style={[styles.eventRow, event.isAllDay && styles.allDayEventRow]}>
-      {event.isAllDay ? null : (
+    <View style={[styles.eventRow, event.displayIsAllDay && styles.allDayEventRow]}>
+      {event.displayIsAllDay ? null : (
         <View style={styles.eventTime}>
-          <Text style={styles.eventHour}>{formatEventTime(event.startTime)}</Text>
-          <Text style={styles.eventMeridiem}>{event.startTime.meridiem}</Text>
+          <Text style={styles.eventHour}>{formatEventTime(event.displayTime)}</Text>
+          <Text style={styles.eventMeridiem}>{event.displayTime.meridiem}</Text>
         </View>
       )}
       <View
         style={[
           styles.eventCard,
           event.categoryColor ? { backgroundColor: event.categoryColor } : null,
-          event.isAllDay && styles.allDayEventCard,
+          event.displayIsAllDay && styles.allDayEventCard,
         ]}>
         <Text style={[styles.eventTitle, { color: titleColor }]}>{event.title}</Text>
         {event.detail ? <Text style={[styles.eventDetail, { color: detailColor }]}>{event.detail}</Text> : null}
@@ -307,7 +425,7 @@ function CalendarDay({
   onPress,
   state,
 }: {
-  chips?: CalendarChip[];
+  chips?: Array<CalendarChip | null>;
   date?: DateData;
   isSelected: boolean;
   onPress: () => void;
@@ -318,7 +436,7 @@ function CalendarDay({
 
   return (
     <TouchableOpacity activeOpacity={0.76} onPress={onPress} style={styles.dayCell}>
-      <View style={isSelected ? styles.todayBadge : undefined}>
+      <View style={[styles.dayNumberSlot, isSelected && styles.todayBadge]}>
         <Text
           style={[
             styles.dayNumber,
@@ -331,23 +449,31 @@ function CalendarDay({
       </View>
 
       <View style={styles.chipStack}>
-        {chips?.map((chip) => (
-          <Text
-            key={`${date?.dateString}-${chip.label}`}
-            numberOfLines={1}
-            style={[
-              styles.calendarChip,
-              chipStyles[chip.tone],
-              chip.color
-                ? {
-                    backgroundColor: chip.color,
-                    color: getContrastTextColor(chip.color),
-                  }
-                : null,
-            ]}>
-            {chip.label}
-          </Text>
-        ))}
+        {chips?.map((chip, index) =>
+          chip ? (
+            <Text
+              key={`${date?.dateString}-${chip.id ?? chip.label}-${index}`}
+              numberOfLines={1}
+              style={[
+                styles.calendarChip,
+                chipStyles[chip.tone],
+                chip.segment !== 'single' && styles.calendarRangeChip,
+                chip.segment === 'start' && styles.calendarRangeChipStart,
+                chip.segment === 'middle' && styles.calendarRangeChipMiddle,
+                chip.segment === 'end' && styles.calendarRangeChipEnd,
+                chip.color
+                  ? {
+                      backgroundColor: chip.color,
+                      color: getContrastTextColor(chip.color),
+                    }
+                  : null,
+              ]}>
+              {chip.label}
+            </Text>
+          ) : (
+            <View key={`${date?.dateString}-spacer-${index}`} style={styles.calendarChipSpacer} />
+          )
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -467,6 +593,14 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
   },
+  dayNumberSlot: {
+    width: 24,
+    height: 28,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
   outsideDay: {
     color: '#D4D4D4',
   },
@@ -474,13 +608,7 @@ const styles = StyleSheet.create({
     color: '#EF4444',
   },
   todayBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
     backgroundColor: '#000000',
-    marginBottom: 4,
   },
   todayText: {
     color: '#FFFFFF',
@@ -503,6 +631,25 @@ const styles = StyleSheet.create({
     lineHeight: 12,
     fontWeight: '500',
     textAlign: 'center',
+  },
+  calendarChipSpacer: {
+    width: '100%',
+    height: 16,
+  },
+  calendarRangeChip: {
+    width: '100%',
+    maxWidth: '100%',
+  },
+  calendarRangeChipStart: {
+    borderTopRightRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  calendarRangeChipMiddle: {
+    borderRadius: 0,
+  },
+  calendarRangeChipEnd: {
+    borderTopLeftRadius: 0,
+    borderBottomLeftRadius: 0,
   },
   scheduleSection: {
     gap: 32,
@@ -538,6 +685,7 @@ const styles = StyleSheet.create({
   },
   eventRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 24,
   },
   allDayEventRow: {
@@ -545,7 +693,6 @@ const styles = StyleSheet.create({
   },
   eventTime: {
     width: 64,
-    paddingTop: 4,
   },
   eventHour: {
     color: '#A3A3A3',
@@ -568,9 +715,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F5',
   },
   allDayEventCard: {
-    minHeight: 84,
+    minHeight: 58,
     paddingHorizontal: 28,
-    paddingVertical: 20,
+    paddingVertical: 14,
     borderRadius: 42,
   },
   eventCardFeatured: {
