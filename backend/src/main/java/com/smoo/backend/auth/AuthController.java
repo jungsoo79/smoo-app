@@ -53,4 +53,28 @@ public class AuthController {
         LoginResponse response = authService.refresh(refreshToken);
         return ResponseEntity.ok(ApiResponse.success(SuccessCode.REFRESH_SUCCESS, response));
     }
+
+    @PostMapping("/password/forgot")
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(@RequestBody Map<String, String> request) {
+        String email = request.get("email");
+        authService.forgotPassword(email);
+        return ResponseEntity.ok(ApiResponse.success(SuccessCode.PASSWORD_RESET_EMAIL_SENT));
+    }
+
+    @PostMapping("/password/verify-otp")
+    public ResponseEntity<ApiResponse<Map<String, String>>> verifyPasswordOtp(@RequestBody Map<String, String> request) {
+        String email = request.get("email");
+        String token = request.get("token");
+        String accessToken = authService.verifyPasswordOtp(email, token);
+        return ResponseEntity.ok(ApiResponse.success(SuccessCode.COMMON_SUCCESS, Map.of("access_token", accessToken)));
+    }
+
+    @PostMapping("/password/reset")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(@RequestHeader("Authorization") String authHeader,
+                                                            @RequestBody Map<String, String> request) {
+        String accessToken = authHeader.replace("Bearer ", "");
+        String newPassword = request.get("password");
+        authService.resetPassword(accessToken, newPassword);
+        return ResponseEntity.ok(ApiResponse.success(SuccessCode.PASSWORD_UPDATE_SUCCESS));
+    }
 }

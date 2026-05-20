@@ -13,7 +13,9 @@ public enum SuccessCode {
     SIGNUP_SUCCESS(HttpStatus.CREATED, "SIGNUP_SUCCESS", "회원가입이 완료되었습니다."),
     LOGOUT_SUCCESS(HttpStatus.OK, "LOGOUT_SUCCESS", "로그아웃이 완료되었습니다."),
     VERIFY_EMAIL_SUCCESS(HttpStatus.OK, "VERIFY_EMAIL_SUCCESS", "이메일 인증이 완료되었습니다."),
-    REFRESH_SUCCESS(HttpStatus.OK, "REFRESH_SUCCESS", "토큰이 갱신되었습니다.");
+    REFRESH_SUCCESS(HttpStatus.OK, "REFRESH_SUCCESS", "토큰이 갱신되었습니다."),
+    PASSWORD_RESET_EMAIL_SENT(HttpStatus.OK, "PASSWORD_RESET_EMAIL_SENT", "비밀번호 재설정 코드가 이메일로 발송되었습니다."),
+    PASSWORD_UPDATE_SUCCESS(HttpStatus.OK, "PASSWORD_UPDATE_SUCCESS", "비밀번호가 변경되었습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
