@@ -6,6 +6,8 @@ import com.smoo.backend.auth.dto.SignupRequest;
 import com.smoo.backend.auth.dto.SignupResponse;
 import com.smoo.backend.common.exception.CustomException;
 import com.smoo.backend.common.exception.ErrorCode;
+import com.smoo.backend.deletion.AccountDeletionRequest;
+import com.smoo.backend.deletion.AccountDeletionRequestRepository;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -14,6 +16,8 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.http.*;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class AuthService {
@@ -25,6 +29,11 @@ public class AuthService {
     private String supabaseAnonKey;
 
     private final RestTemplate restTemplate = new RestTemplate();
+    private final AccountDeletionRequestRepository deletionRequestRepository;
+
+    public AuthService(AccountDeletionRequestRepository deletionRequestRepository) {
+        this.deletionRequestRepository = deletionRequestRepository;
+    }
 
     public LoginResponse login(LoginRequest request) {
         String url = supabaseUrl + "/auth/v1/token?grant_type=password";
@@ -48,6 +57,19 @@ public class AuthService {
             loginResponse.setRefreshToken((String) responseBody.get("refresh_token"));
             loginResponse.setTokenType((String) responseBody.get("token_type"));
             loginResponse.setExpiresIn(((Number) responseBody.get("expires_in")).longValue());
+            Map<String, Object> userMap = (Map<String, Object>) responseBody.get("user");
+            if (userMap != null) {
+                UUID userId = UUID.fromString((String) userMap.get("id"));
+                Optional<AccountDeletionRequest> deletion = deletionRequestRepository
+                    .findPendingByUserId(userId);
+
+                if (deletion.isPresent()) {
+                    loginResponse.setIsDeletionPending(true);
+                    loginResponse.setScheduledDeleteAt(deletion.get().getScheduledDeleteAt());
+                } else {
+                    loginResponse.setIsDeletionPending(false);
+                }
+            }
 
             return loginResponse;
 
