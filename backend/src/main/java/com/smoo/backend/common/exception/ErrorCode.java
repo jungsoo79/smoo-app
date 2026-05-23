@@ -47,6 +47,10 @@ public enum ErrorCode {
     // Profile
     PROFILE_NOT_FOUND(HttpStatus.NOT_FOUND, "PROFILE_NOT_FOUND", "프로필을 찾을 수 없습니다."),
 
+    // Schedule
+    SCHEDULE_NOT_FOUND(HttpStatus.NOT_FOUND, "SCHEDULE_NOT_FOUND", "일정을 찾을 수 없습니다."),
+    SCHEDULE_FORBIDDEN(HttpStatus.FORBIDDEN, "SCHEDULE_FORBIDDEN", "해당 일정에 접근 권한이 없습니다."),
+
     // Deletion
     DELETION_REQUEST_NOT_FOUND(HttpStatus.NOT_FOUND, "DELETION_REQUEST_NOT_FOUND", "탈퇴 요청을 찾을 수 없습니다."),
     DELETION_ALREADY_REQUESTED(HttpStatus.CONFLICT, "DELETION_ALREADY_REQUESTED", "이미 탈퇴 요청 중입니다."),
