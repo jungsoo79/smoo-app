@@ -2,10 +2,12 @@ package com.smoo.backend.deletion;
 
 import jakarta.persistence.*;
 import lombok.Getter;
+import lombok.Setter;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Getter
+@Setter
 @Entity
 @Table(name = "account_deletion_requests")
 public class AccountDeletionRequest {
