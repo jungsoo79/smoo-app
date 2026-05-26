@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { login } from '@/features/auth/api';
+import { saveSession } from '@/features/auth/session';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -60,7 +61,8 @@ export default function LoginScreen() {
 
     try {
       setLoggingIn(true);
-      await login(trimmedLoginId, password);
+      const session = await login(trimmedLoginId, password);
+      await saveSession(session);
       router.replace('/(tabs)');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'LOGIN_FAILED';

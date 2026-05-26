@@ -23,18 +23,37 @@ type AppTopBarProps = {
   title?: string;
   backgroundColor?: string;
   height?: number;
+  leftIcon?: ComponentProps<typeof MaterialIcons>['name'];
+  leftAccessibilityLabel?: string;
+  onLeftPress?: (event: GestureResponderEvent) => void;
 };
 
 export function AppTopBar({
   title,
   backgroundColor = 'rgba(255, 255, 255, 0.45)',
   height = 52,
+  leftIcon = 'menu',
+  leftAccessibilityLabel = '메뉴',
+  onLeftPress,
 }: AppTopBarProps) {
+  const handleLeftPress = (event: GestureResponderEvent) => {
+    if (onLeftPress) {
+      onLeftPress(event);
+      return;
+    }
+
+    router.push('/settings');
+  };
+
   return (
     <SafeAreaView style={[styles.topBarSafe, { backgroundColor }]} edges={['top']}>
       <View style={[styles.topBar, { backgroundColor, height }]}>
-        <TouchableOpacity accessibilityLabel="메뉴" style={styles.iconButton}>
-          <MaterialIcons name="menu" size={20} color="#191C1D" />
+        <TouchableOpacity
+          accessibilityLabel={leftAccessibilityLabel}
+          activeOpacity={0.72}
+          onPress={handleLeftPress}
+          style={styles.iconButton}>
+          <MaterialIcons name={leftIcon} size={20} color="#191C1D" />
         </TouchableOpacity>
         {title ? <Text style={styles.topTitle}>{title}</Text> : null}
         <TouchableOpacity accessibilityLabel="알림" style={styles.iconButton}>
