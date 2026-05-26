@@ -31,7 +31,7 @@ public enum ErrorCode {
     // Password
     PASSWORD_RESET_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "PASSWORD_RESET_FAILED", "비밀번호 재설정 코드 발송에 실패했습니다."),
     PASSWORD_UPDATE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "PASSWORD_UPDATE_FAILED", "새 비밀번호 변경에 실패했습니다."),
-
+    INVALID_CURRENT_PASSWORD(HttpStatus.UNAUTHORIZED, "INVALID_CURRENT_PASSWORD", "현재 비밀번호가 올바르지 않습니다."),
 
     // Settings
     PREFERENCES_NOT_FOUND(HttpStatus.NOT_FOUND, "PREFERENCES_NOT_FOUND", "설정 정보를 찾을 수 없습니다."),
@@ -47,7 +47,7 @@ public enum ErrorCode {
     // Profile
     PROFILE_NOT_FOUND(HttpStatus.NOT_FOUND, "PROFILE_NOT_FOUND", "프로필을 찾을 수 없습니다."),
 
-    
+
     // Resource
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "요청한 데이터를 찾을 수 없습니다.");
 

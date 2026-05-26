@@ -283,4 +283,67 @@ public class AuthService {
             }
         }
     }
+
+    public void changePassword(String accessToken, String currentPassword, String newPassword) {
+        // 1. 현재 accessToken으로 이메일 조회
+        String userUrl = supabaseUrl + "/auth/v1/user";
+
+        HttpHeaders userHeaders = new HttpHeaders();
+        userHeaders.setContentType(MediaType.APPLICATION_JSON);
+        userHeaders.set("apikey", supabaseAnonKey);
+        userHeaders.setBearerAuth(accessToken);
+
+        HttpEntity<Void> userEntity = new HttpEntity<>(userHeaders);
+
+        String email;
+        try {
+            ResponseEntity<Map> userResponse = restTemplate.exchange(userUrl, HttpMethod.GET, userEntity, Map.class);
+            email = (String) userResponse.getBody().get("email");
+        } catch (HttpClientErrorException e) {
+            throw new CustomException(ErrorCode.UNAUTHORIZED);
+        }
+
+        // 2. 현재 비밀번호 검증 (로그인 시도)
+        String tokenUrl = supabaseUrl + "/auth/v1/token?grant_type=password";
+
+        HttpHeaders tokenHeaders = new HttpHeaders();
+        tokenHeaders.setContentType(MediaType.APPLICATION_JSON);
+        tokenHeaders.set("apikey", supabaseAnonKey);
+
+        Map<String, String> tokenBody = new HashMap<>();
+        tokenBody.put("email", email);
+        tokenBody.put("password", currentPassword);
+
+        HttpEntity<Map<String, String>> tokenEntity = new HttpEntity<>(tokenBody, tokenHeaders);
+
+        try {
+            restTemplate.postForEntity(tokenUrl, tokenEntity, Map.class);
+        } catch (HttpClientErrorException e) {
+            throw new CustomException(ErrorCode.INVALID_CURRENT_PASSWORD);
+        }
+
+        // 3. 새 비밀번호로 변경
+        String updateUrl = supabaseUrl + "/auth/v1/user";
+
+        HttpHeaders updateHeaders = new HttpHeaders();
+        updateHeaders.setContentType(MediaType.APPLICATION_JSON);
+        updateHeaders.set("apikey", supabaseAnonKey);
+        updateHeaders.setBearerAuth(accessToken);
+
+        Map<String, String> updateBody = new HashMap<>();
+        updateBody.put("password", newPassword);
+
+        HttpEntity<Map<String, String>> updateEntity = new HttpEntity<>(updateBody, updateHeaders);
+
+        try {
+            restTemplate.exchange(updateUrl, HttpMethod.PUT, updateEntity, Map.class);
+        } catch (HttpClientErrorException e) {
+            String errorBody = e.getResponseBodyAsString();
+            if (errorBody.contains("weak_password")) {
+                throw new CustomException(ErrorCode.WEAK_PASSWORD);
+            } else {
+                throw new CustomException(ErrorCode.PASSWORD_UPDATE_FAILED);
+            }
+        }
+    }
 }

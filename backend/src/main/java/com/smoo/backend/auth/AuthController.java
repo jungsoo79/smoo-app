@@ -2,6 +2,7 @@ package com.smoo.backend.auth;
 
 import com.smoo.backend.auth.dto.LoginRequest;
 import com.smoo.backend.auth.dto.LoginResponse;
+import com.smoo.backend.auth.dto.PasswordChangeRequest;
 import com.smoo.backend.auth.dto.SignupRequest;
 import com.smoo.backend.auth.dto.SignupResponse;
 import com.smoo.backend.common.response.ApiResponse;
@@ -75,6 +76,15 @@ public class AuthController {
         String accessToken = authHeader.replace("Bearer ", "");
         String newPassword = request.get("password");
         authService.resetPassword(accessToken, newPassword);
+        return ResponseEntity.ok(ApiResponse.success(SuccessCode.PASSWORD_UPDATE_SUCCESS));
+    }
+
+    @PatchMapping("/password/change")
+    public ResponseEntity<ApiResponse<Void>> changePassword(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestBody PasswordChangeRequest request) {
+        String accessToken = authHeader.replace("Bearer ", "");
+        authService.changePassword(accessToken, request.getCurrentPassword(), request.getNewPassword());
         return ResponseEntity.ok(ApiResponse.success(SuccessCode.PASSWORD_UPDATE_SUCCESS));
     }
 }
