@@ -2,6 +2,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { AppBottomNav, AppFloatingActionButton, AppTopBar } from '@/components/app-chrome';
+import { AppColors, AppTypography } from '@/constants/appStyles';
 
 import { useState } from 'react';
 import { memos } from '@/features/memo/mock';
@@ -180,29 +181,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   memoCategory: {
-    color: '#777777',
-    fontSize: 10,
-    lineHeight: 15,
+    ...AppTypography.micro,
     fontWeight: '600',
     letterSpacing: 2,
     textTransform: 'uppercase',
   },
   memoDate: {
-    color: '#777777',
-    fontSize: 11,
-    lineHeight: 17,
+    ...AppTypography.caption,
+    color: AppColors.textMuted,
     fontWeight: '500',
   },
   memoTitle: {
-    color: '#000000',
-    fontSize: 20,
-    lineHeight: 28,
-    fontWeight: '700',
+    ...AppTypography.sectionTitle,
   },
   memoBody: {
-    color: '#474747',
-    fontSize: 16,
-    lineHeight: 26,
+    ...AppTypography.body,
+    color: AppColors.textSecondary,
     fontWeight: '400',
   },
   progressRow: {

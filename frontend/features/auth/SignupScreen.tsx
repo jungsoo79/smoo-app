@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppColors, AppTypography } from '@/constants/appStyles';
 import { signup } from '@/features/auth/api';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -395,16 +396,14 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   title: {
-    color: '#000000',
+    ...AppTypography.authBrandTitle,
     fontSize: 42,
     lineHeight: 48,
-    fontWeight: '800',
   },
   subtitle: {
     maxWidth: 280,
-    color: 'rgba(71, 71, 71, 0.68)',
-    fontSize: 15,
-    lineHeight: 22,
+    ...AppTypography.bodySecondary,
+    color: AppColors.textMuted,
     fontWeight: '500',
     textAlign: 'center',
   },
@@ -416,9 +415,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   label: {
-    color: '#474747',
-    fontSize: 12,
-    lineHeight: 16,
+    ...AppTypography.caption,
+    color: AppColors.textSecondary,
     fontWeight: '600',
   },
   emailRow: {
