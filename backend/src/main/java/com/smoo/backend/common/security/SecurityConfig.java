@@ -48,6 +48,9 @@ public class SecurityConfig {
                         // 메모 API 개발/테스트용 임시 허용
                         .requestMatchers("/api/memos/**").permitAll()
 
+                        // 할 일 API 개발/테스트용 임시 허용
+                        .requestMatchers("/api/tasks/**").permitAll()
+
                         // Swagger 문서 접근 허용
                         .requestMatchers(
                                 "/swagger-ui/**",
