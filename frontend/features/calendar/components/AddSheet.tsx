@@ -21,9 +21,22 @@ import { CategoryAddModal } from '@/components/shared/CategoryAddModal';
 import { DatePickerPopup } from '@/components/shared/DatePickerPopup';
 
 type AddSheetProps = {
+  initialEvent?: {
+    category: string;
+    categoryColor?: string;
+    date: string;
+    detail: string;
+    endDate: string;
+    endTime: TimeValue;
+    id: string;
+    isAllDay: boolean;
+    startTime: TimeValue;
+    title: string;
+  } | null;
   initialDate?: string;
   visible: boolean;
   onClose: () => void;
+  onDelete?: (eventId: string) => void;
   onSave?: (event: {
     category: string;
     categoryColor?: string;
@@ -35,6 +48,20 @@ type AddSheetProps = {
     startTime: TimeValue;
     title: string;
   }) => void;
+  onUpdate?: (
+    eventId: string,
+    event: {
+      category: string;
+      categoryColor?: string;
+      date: string;
+      detail: string;
+      endDate: string;
+      endTime: TimeValue;
+      isAllDay: boolean;
+      startTime: TimeValue;
+      title: string;
+    }
+  ) => void;
 };
 
 type DateTarget = 'start' | 'end';
@@ -100,7 +127,7 @@ function getInitialTime(): TimeValue {
   };
 }
 
-export function AddSheet({ initialDate, visible, onClose, onSave }: AddSheetProps) {
+export function AddSheet({ initialDate, initialEvent, visible, onClose, onDelete, onSave, onUpdate }: AddSheetProps) {
   const translateY = useRef(new Animated.Value(640)).current;
   const today = useMemo(getTodayString, []);
   const initialEventDate = initialDate ?? today;
@@ -124,6 +151,7 @@ export function AddSheet({ initialDate, visible, onClose, onSave }: AddSheetProp
   const categoryRowRef = useRef<View>(null);
   const alertRowRef = useRef<View>(null);
   const [optionAnchor, setOptionAnchor] = useState<LayoutRectangle | null>(null);
+  const isEditMode = Boolean(initialEvent);
 
   useEffect(() => {
     Animated.spring(translateY, {
@@ -138,19 +166,19 @@ export function AddSheet({ initialDate, visible, onClose, onSave }: AddSheetProp
   useEffect(() => {
     if (visible) {
       const nextDate = initialDate ?? today;
-      setTitle('');
-      setDetail('');
-      setAllDay(false);
-      setStartDate(nextDate);
-      setEndDate(nextDate);
-      setStartTime(getInitialTime());
-      setEndTime(getInitialTime());
+      setTitle(initialEvent?.title ?? '');
+      setDetail(initialEvent?.detail ?? '');
+      setAllDay(initialEvent?.isAllDay ?? false);
+      setStartDate(initialEvent?.date ?? nextDate);
+      setEndDate(initialEvent?.endDate ?? nextDate);
+      setStartTime(initialEvent?.startTime ?? getInitialTime());
+      setEndTime(initialEvent?.endTime ?? getInitialTime());
       setDateError('');
       setRepeat('없음');
-      setCategory('없음');
+      setCategory(initialEvent?.category ?? '없음');
       setAlert('없음');
     }
-  }, [initialDate, today, visible]);
+  }, [initialDate, initialEvent, today, visible]);
 
   const closeWithAnimation = useCallback(() => {
     Animated.timing(translateY, {
@@ -283,7 +311,7 @@ export function AddSheet({ initialDate, visible, onClose, onSave }: AddSheetProp
       return;
     }
 
-    onSave?.({
+    const nextEvent = {
       category,
       categoryColor: categoryOptions.find((option) => option.label === category)?.color,
       date: startDate,
@@ -293,7 +321,14 @@ export function AddSheet({ initialDate, visible, onClose, onSave }: AddSheetProp
       isAllDay,
       startTime,
       title: nextTitle,
-    });
+    };
+
+    if (initialEvent) {
+      onUpdate?.(initialEvent.id, nextEvent);
+    } else {
+      onSave?.(nextEvent);
+    }
+
     closeWithAnimation();
   }, [
     category,
@@ -303,11 +338,22 @@ export function AddSheet({ initialDate, visible, onClose, onSave }: AddSheetProp
     endDate,
     endTime,
     isAllDay,
+    initialEvent,
     onSave,
+    onUpdate,
     startDate,
     startTime,
     title,
   ]);
+
+  const deleteEvent = useCallback(() => {
+    if (!initialEvent) {
+      return;
+    }
+
+    onDelete?.(initialEvent.id);
+    closeWithAnimation();
+  }, [closeWithAnimation, initialEvent, onDelete]);
 
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={closeWithAnimation}>
@@ -391,9 +437,20 @@ export function AddSheet({ initialDate, visible, onClose, onSave }: AddSheetProp
               value={alert}
             />
 
-            <TouchableOpacity activeOpacity={0.84} onPress={submitEvent} style={styles.sheetSubmitButton}>
-              <Text style={styles.sheetSubmitText}>추가하기</Text>
-            </TouchableOpacity>
+            {isEditMode ? (
+              <View style={styles.sheetActionRow}>
+                <TouchableOpacity activeOpacity={0.84} onPress={submitEvent} style={styles.sheetEditButton}>
+                  <Text style={styles.sheetSubmitText}>수정</Text>
+                </TouchableOpacity>
+                <TouchableOpacity activeOpacity={0.84} onPress={deleteEvent} style={styles.sheetDeleteButton}>
+                  <Text style={styles.sheetSubmitText}>삭제</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity activeOpacity={0.84} onPress={submitEvent} style={styles.sheetSubmitButton}>
+                <Text style={styles.sheetSubmitText}>추가하기</Text>
+              </TouchableOpacity>
+            )}
           </ScrollView>
         </Animated.View>
 
@@ -429,6 +486,17 @@ export function AddSheet({ initialDate, visible, onClose, onSave }: AddSheetProp
 
         <OptionPickerModal
           onClose={() => setOpenOptionMenu(null)}
+          onRemoveOption={(value) => {
+            if (openOptionMenu !== 'category') {
+              return;
+            }
+
+            setCategoryOptions((options) => options.filter((option) => option.label !== value));
+
+            if (category === value) {
+              setCategory('없음');
+            }
+          }}
           onSelect={(value) => {
             if (openOptionMenu === 'repeat') {
               setRepeat(value);
@@ -637,6 +705,7 @@ function OptionRow({
 function OptionPickerModal({
   anchor,
   onClose,
+  onRemoveOption,
   onSelect,
   options,
   selectedValue,
@@ -645,41 +714,54 @@ function OptionPickerModal({
 }: {
   anchor: LayoutRectangle | null;
   onClose: () => void;
+  onRemoveOption?: (value: string) => void;
   onSelect: (value: string) => void;
   options: PickerOption[];
   selectedValue: string;
   title: string;
   visible: boolean;
 }) {
+  const isPopup = true;
   const pickerWidth = 132;
   const pickerTop = anchor ? anchor.y + anchor.height - 10 : 0;
   const pickerRight = anchor ? Math.max(16, screenWidth - anchor.x - anchor.width) : 32;
 
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
-      <View style={styles.optionPickerLayer}>
-        <Pressable accessibilityLabel={`${title} 선택 닫기`} onPress={onClose} style={styles.optionPickerBackdrop} />
+      <View style={[styles.optionPickerLayer, isPopup && styles.optionPickerPopupLayer]}>
+        <Pressable
+          accessibilityLabel={`${title} 선택 닫기`}
+          onPress={onClose}
+          style={[styles.optionPickerBackdrop, isPopup && styles.optionPickerPopupBackdrop]}
+        />
 
         <View
-          style={[
-            styles.optionPickerCard,
-            {
-              right: pickerRight,
-              top: pickerTop,
-              width: pickerWidth,
-            },
-          ]}>
+          style={
+            isPopup
+              ? [styles.optionPickerCard, styles.optionPickerPopupCard]
+              : [
+                  styles.optionPickerCard,
+                  {
+                    right: pickerRight,
+                    top: pickerTop,
+                    width: pickerWidth,
+                  },
+                ]
+          }>
+          {isPopup ? <Text style={styles.optionPickerTitle}>{title}</Text> : null}
           <ScrollView
             bounces={false}
             showsVerticalScrollIndicator={false}
-            style={styles.optionPickerList}
+            style={[styles.optionPickerList, isPopup && styles.optionPickerPopupList]}
             contentContainerStyle={styles.optionPickerContent}>
-            {options.map((option) => (
+            {options.map((option, index) => (
               <PickerOptionRow
                 color={option.color}
                 isSelected={selectedValue === option.label}
+                isLast={index === options.length - 1}
                 key={option.label}
                 label={option.label}
+                onRemove={option.color ? onRemoveOption : undefined}
                 onPress={() => {
                   if (option.onPress) {
                     option.onPress();
@@ -700,18 +782,39 @@ function OptionPickerModal({
 function PickerOptionRow({
   color,
   isSelected = false,
+  isLast,
   label,
+  onRemove,
   onPress,
 }: {
   color?: string;
   isSelected?: boolean;
+  isLast: boolean;
   label: string;
+  onRemove?: (value: string) => void;
   onPress: () => void;
 }) {
   return (
-    <TouchableOpacity activeOpacity={0.72} onPress={onPress} style={styles.optionPickerItem}>
-      {color ? <View style={[styles.categoryDot, { backgroundColor: color }]} /> : null}
-      <Text style={[styles.optionPickerItemText, isSelected && styles.optionPickerItemSelected]}>{label}</Text>
+    <TouchableOpacity
+      activeOpacity={0.72}
+      onPress={onPress}
+      style={[styles.optionPickerItem, !isLast && styles.optionPickerItemBorder]}>
+      {color ? (
+        <TouchableOpacity
+          accessibilityLabel={`${label} 카테고리 삭제`}
+          activeOpacity={0.68}
+          onPress={(event) => {
+            event.stopPropagation();
+            onRemove?.(label);
+          }}
+          style={styles.categoryRemoveButton}>
+          <MaterialIcons name="close" size={12} color="#B6B6B6" style={styles.categoryRemoveIcon} />
+        </TouchableOpacity>
+      ) : null}
+      <View style={styles.optionPickerLabelGroup}>
+        <Text style={[styles.optionPickerItemText, isSelected && styles.optionPickerItemSelected]}>{label}</Text>
+        {color ? <View style={[styles.categoryDot, { backgroundColor: color }]} /> : null}
+      </View>
     </TouchableOpacity>
   );
 }
@@ -898,9 +1001,17 @@ const styles = StyleSheet.create({
     zIndex: 999,
     elevation: 999,
   },
+  optionPickerPopupLayer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
   optionPickerBackdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'transparent',
+  },
+  optionPickerPopupBackdrop: {
+    backgroundColor: 'rgba(0, 0, 0, 0.16)',
   },
   optionPickerCard: {
     position: 'absolute',
@@ -913,29 +1024,77 @@ const styles = StyleSheet.create({
     elevation: 24,
     zIndex: 1000,
   },
+  optionPickerPopupCard: {
+    position: 'relative',
+    width: '100%',
+    maxWidth: 320,
+    borderRadius: 34,
+    paddingTop: 24,
+    paddingHorizontal: 24,
+    paddingBottom: 18,
+    backgroundColor: '#FFFFFF',
+  },
+  optionPickerTitle: {
+    color: '#191C1D',
+    fontSize: 20,
+    lineHeight: 28,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
   optionPickerList: {
     maxHeight: 142,
   },
+  optionPickerPopupList: {
+    maxHeight: 360,
+  },
   optionPickerContent: {
-    paddingVertical: 14,
-    paddingHorizontal: 18,
+    paddingTop: 20,
+    paddingBottom: 2,
+    paddingHorizontal: 0,
   },
   optionPickerItem: {
-    minHeight: 38,
+    minHeight: 58,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     gap: 12,
+  },
+  optionPickerItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(225, 227, 228, 0.72)',
   },
   optionPickerItemText: {
     color: '#474747',
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: 17,
+    lineHeight: 24,
     fontWeight: '500',
     textAlign: 'right',
   },
   optionPickerItemSelected: { color: '#000000', fontWeight: '800' },
+  optionPickerLabelGroup: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
   categoryDot: { width: 10, height: 10, borderRadius: 999 },
+  categoryRemoveButton: {
+    width: 12,
+    height: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryRemoveIcon: {
+    width: 12,
+    height: 12,
+  },
+  categoryRemoveBadge: {
+    width: 12,
+    height: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   sheetSubmitButton: {
     height: 64,
     marginTop: 70,
@@ -946,6 +1105,36 @@ const styles = StyleSheet.create({
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 14 },
     shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  sheetActionRow: {
+    height: 64,
+    marginTop: 70,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  sheetEditButton: {
+    flex: 1,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#000000',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  sheetDeleteButton: {
+    flex: 1,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#A94A4A',
+    shadowColor: '#A94A4A',
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.16,
     shadowRadius: 24,
     elevation: 10,
   },
