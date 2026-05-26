@@ -1,22 +1,16 @@
 import type {
   ChangePasswordPayload,
   PushPreferences,
+  SettingsPreferences,
   SettingsBootstrap,
   UpdateProfilePayload,
   UserProfile,
 } from './types';
 import { logout as requestLogout } from '@/features/auth/api';
 import { clearSession } from '@/features/auth/session';
+import { getJson, patchJson, postJson } from '@/lib/api-client';
 
 const MOCK_DELAY_MS = 160;
-
-let mockProfile: UserProfile = {
-  id: 'mock-user-1',
-  nickname: null,
-  email: null,
-  joinedAt: null,
-  provider: 'email',
-};
 
 let mockPushPreferences: PushPreferences = {
   allPush: true,
@@ -25,72 +19,100 @@ let mockPushPreferences: PushPreferences = {
   servicePush: false,
 };
 
+const DEFAULT_PREFERENCES: SettingsPreferences = {
+  theme: 'system',
+  language: 'ko',
+};
+
+type ProfileResponse = {
+  name: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+  bio: string | null;
+};
+
+type PreferencesResponse = {
+  theme: string | null;
+  language: string | null;
+};
+
 function delay() {
   return new Promise((resolve) => {
     setTimeout(resolve, MOCK_DELAY_MS);
   });
 }
 
-function cloneProfile(): UserProfile {
-  return { ...mockProfile };
-}
-
 function clonePushPreferences(): PushPreferences {
   return { ...mockPushPreferences };
 }
 
-export async function getSettingsBootstrap(): Promise<SettingsBootstrap> {
-  await delay();
+function toUserProfile(profile: ProfileResponse): UserProfile {
+  return {
+    id: '',
+    nickname: profile.name,
+    email: profile.email,
+    joinedAt: null,
+    provider: 'email',
+  };
+}
+
+function toSettingsPreferences(preferences: PreferencesResponse): SettingsPreferences {
+  const theme = preferences.theme === 'light' || preferences.theme === 'dark' ? preferences.theme : 'system';
 
   return {
-    profile: cloneProfile(),
-    pushPreferences: clonePushPreferences(),
+    theme,
+    language: preferences.language,
+  };
+}
+
+export async function getSettingsBootstrap(): Promise<SettingsBootstrap> {
+  const [profile, preferences, pushPreferences] = await Promise.all([
+    getMyProfile(),
+    getSettingsPreferences().catch(() => DEFAULT_PREFERENCES),
+    getPushPreferences(),
+  ]);
+
+  return {
+    profile,
+    preferences,
+    pushPreferences,
   };
 }
 
 export async function getMyProfile(): Promise<UserProfile> {
-  await delay();
-  return cloneProfile();
+  const profile = await getJson<ProfileResponse>('/profiles/me');
+  return toUserProfile(profile);
 }
 
 export async function updateMyProfile(payload: UpdateProfilePayload): Promise<UserProfile> {
-  await delay();
+  const nickname = payload.nickname?.trim();
 
-  if (payload.nickname !== undefined) {
-    const nickname = payload.nickname.trim();
-
-    if (nickname.length < 2 || nickname.length > 20) {
-      throw new Error('INVALID_NICKNAME');
-    }
-
-    mockProfile = {
-      ...mockProfile,
-      nickname,
-    };
+  if (nickname !== undefined && (nickname.length < 2 || nickname.length > 20)) {
+    throw new Error('INVALID_NICKNAME');
   }
 
-  return cloneProfile();
+  const profile = await patchJson<ProfileResponse>('/profiles/me', { name: nickname });
+  return toUserProfile(profile);
+}
+
+export async function getSettingsPreferences(): Promise<SettingsPreferences> {
+  const preferences = await getJson<PreferencesResponse>('/settings/preferences');
+  return toSettingsPreferences(preferences);
 }
 
 export async function changePassword(payload: ChangePasswordPayload): Promise<void> {
-  await delay();
-
-  if (mockProfile.provider !== 'email') {
-    throw new Error('PASSWORD_NOT_SUPPORTED_FOR_SOCIAL_ACCOUNT');
-  }
-
   if (payload.newPassword !== payload.confirmPassword) {
     throw new Error('PASSWORD_CONFIRM_MISMATCH');
   }
+
+  await patchJson<void>('/auth/password/change', {
+    currentPassword: payload.currentPassword,
+    newPassword: payload.newPassword,
+  });
 }
 
 export async function withdrawAccount(): Promise<void> {
-  await delay();
-
-  mockProfile = {
-    ...mockProfile,
-    nickname: null,
-  };
+  await postJson<void>('/account-deletion-requests', { reason: 'USER_REQUESTED_FROM_SETTINGS' });
 }
 
 export async function getPushPreferences(): Promise<PushPreferences> {

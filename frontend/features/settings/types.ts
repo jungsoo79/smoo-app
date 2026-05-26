@@ -15,6 +15,13 @@ export type PushPreferences = {
   servicePush: boolean;
 };
 
+export type ThemePreference = 'system' | 'light' | 'dark';
+
+export type SettingsPreferences = {
+  theme: ThemePreference;
+  language: string | null;
+};
+
 export type UpdateProfilePayload = {
   nickname?: string;
 };
@@ -27,5 +34,6 @@ export type ChangePasswordPayload = {
 
 export type SettingsBootstrap = {
   profile: UserProfile;
+  preferences: SettingsPreferences;
   pushPreferences: PushPreferences;
 };

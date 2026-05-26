@@ -1,6 +1,7 @@
 import { getAccessToken } from '@/features/auth/session';
 
 const DEFAULT_API_BASE_URL = 'http://localhost:8080';
+const API_PREFIX = '/api/v1';
 
 const apiBaseUrl =
   (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
@@ -10,6 +11,14 @@ type ApiErrorBody = {
   error?: string;
   code?: string;
   message?: string;
+};
+
+type ApiResponse<TResponse> = {
+  success: boolean;
+  status: number;
+  code: string;
+  message: string;
+  data: TResponse;
 };
 
 type RequestOptions = {
@@ -31,7 +40,7 @@ export class ApiError extends Error {
 
 async function parseResponse<TResponse>(response: Response) {
   const text = await response.text();
-  const data = text ? (JSON.parse(text) as TResponse | ApiErrorBody) : undefined;
+  const data = text ? (JSON.parse(text) as TResponse | ApiResponse<TResponse> | ApiErrorBody) : undefined;
 
   if (!response.ok) {
     const errorBody = data as ApiErrorBody | undefined;
@@ -41,7 +50,22 @@ async function parseResponse<TResponse>(response: Response) {
     );
   }
 
+  if (data && typeof data === 'object' && 'success' in data && 'data' in data) {
+    return (data as ApiResponse<TResponse>).data;
+  }
+
   return data as TResponse;
+}
+
+function buildApiUrl(path: string) {
+  const baseUrl = apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+
+  if (normalizedPath.startsWith(API_PREFIX)) {
+    return `${baseUrl}${normalizedPath}`;
+  }
+
+  return `${baseUrl}${API_PREFIX}${normalizedPath}`;
 }
 
 export async function requestJson<TResponse>(path: string, options: RequestOptions): Promise<TResponse> {
@@ -63,7 +87,7 @@ export async function requestJson<TResponse>(path: string, options: RequestOptio
     }
   }
 
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const response = await fetch(buildApiUrl(path), {
     method: options.method,
     headers,
     body,

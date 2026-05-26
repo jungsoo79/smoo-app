@@ -25,6 +25,7 @@ import {
   withdrawAccount,
 } from '@/features/settings/api';
 import type { AuthProvider, PushPreferences, UserProfile } from '@/features/settings/types';
+import { ApiError } from '@/lib/api-client';
 
 type AccountActionKey = 'profile' | 'password' | 'withdrawal';
 type ModalKey = AccountActionKey | 'nickname' | 'logout' | null;
@@ -89,6 +90,12 @@ const AUTH_PROVIDER_LABELS: Record<AuthProvider, string> = {
   google: 'Google',
   kakao: 'Kakao',
 };
+
+const AUTH_REQUIRED_MESSAGE = '로그인이 필요한 화면입니다. 로그인 후 다시 확인해주세요.';
+
+function isAuthError(error: unknown) {
+  return error instanceof ApiError && (error.status === 401 || error.status === 403);
+}
 
 function toPushPreferences(toggles: Record<ToggleKey, boolean>): PushPreferences {
   return {
@@ -155,9 +162,9 @@ export default function SettingsScreen() {
 
     try {
       await updatePushPreferences(next);
-    } catch {
+    } catch (error) {
       setToggles(previous);
-      setScreenError('알림 설정을 저장하지 못했습니다. 다시 시도해주세요.');
+      setScreenError(isAuthError(error) ? AUTH_REQUIRED_MESSAGE : '알림 설정을 저장하지 못했습니다. 다시 시도해주세요.');
     } finally {
       setSavingTarget(null);
     }
@@ -246,8 +253,8 @@ export default function SettingsScreen() {
         setProfile(updatedProfile);
         closeModal();
       })
-      .catch(() => {
-        setNicknameError('닉네임 변경에 실패했습니다. 다시 시도해주세요.');
+      .catch((error) => {
+        setNicknameError(isAuthError(error) ? AUTH_REQUIRED_MESSAGE : '닉네임 변경에 실패했습니다. 다시 시도해주세요.');
       })
       .finally(() => {
         setSavingTarget(null);
@@ -280,8 +287,10 @@ export default function SettingsScreen() {
     setSavingTarget('password');
     changePassword({ currentPassword, newPassword, confirmPassword })
       .then(closeModal)
-      .catch(() => {
-        setPasswordError('비밀번호 변경에 실패했습니다. 입력 정보를 확인해주세요.');
+      .catch((error) => {
+        setPasswordError(
+          isAuthError(error) ? AUTH_REQUIRED_MESSAGE : '비밀번호 변경에 실패했습니다. 입력 정보를 확인해주세요.',
+        );
       })
       .finally(() => {
         setSavingTarget(null);
@@ -299,11 +308,18 @@ export default function SettingsScreen() {
 
   const confirmWithdrawal = () => {
     setSavingTarget('withdrawal');
-    withdrawAccount().finally(() => {
-      setSavingTarget(null);
-      closeModal();
-      router.replace('/login');
-    });
+    withdrawAccount()
+      .then(() => {
+        closeModal();
+        router.replace('/login');
+      })
+      .catch((error) => {
+        setScreenError(isAuthError(error) ? AUTH_REQUIRED_MESSAGE : '회원 탈퇴 요청을 처리하지 못했습니다.');
+        closeModal();
+      })
+      .finally(() => {
+        setSavingTarget(null);
+      });
   };
 
   useEffect(() => {
@@ -333,14 +349,14 @@ export default function SettingsScreen() {
     setScreenError('');
 
     getSettingsBootstrap()
-      .then(({ profile: nextProfile, pushPreferences }) => {
+      .then(({ preferences, profile: nextProfile, pushPreferences }) => {
         if (!isMounted) {
           return;
         }
 
         setProfile(nextProfile);
         setToggles({
-          systemTheme: true,
+          systemTheme: preferences.theme === 'system',
           ...pushPreferences,
         });
         previousPushSettings.current = {
@@ -349,9 +365,9 @@ export default function SettingsScreen() {
           servicePush: pushPreferences.servicePush,
         };
       })
-      .catch(() => {
+      .catch((error) => {
         if (isMounted) {
-          setScreenError('설정 정보를 불러오지 못했습니다.');
+          setScreenError(isAuthError(error) ? AUTH_REQUIRED_MESSAGE : '설정 정보를 불러오지 못했습니다.');
         }
       })
       .finally(() => {
@@ -480,11 +496,14 @@ export default function SettingsScreen() {
         primaryDisabled={savingTarget === 'nickname'}
         onPrimaryPress={saveNickname}>
         <TextInput
+          autoComplete="nickname"
           maxLength={20}
+          nativeID="settings-nickname"
           onChangeText={setNicknameDraft}
           placeholder="새 닉네임"
           placeholderTextColor="rgba(71, 71, 71, 0.42)"
           style={styles.input}
+          textContentType="nickname"
           value={nicknameDraft}
         />
         <Text style={styles.helperText}>2자 이상 20자 이하로 입력해주세요.</Text>
@@ -500,27 +519,36 @@ export default function SettingsScreen() {
         primaryDisabled={savingTarget === 'password'}
         onPrimaryPress={savePassword}>
         <TextInput
+          autoComplete="current-password"
+          nativeID="settings-current-password"
           onChangeText={(value) => setPasswordForm((current) => ({ ...current, currentPassword: value }))}
           placeholder="현재 비밀번호"
           placeholderTextColor="rgba(71, 71, 71, 0.42)"
           secureTextEntry
           style={styles.input}
+          textContentType="password"
           value={passwordForm.currentPassword}
         />
         <TextInput
+          autoComplete="new-password"
+          nativeID="settings-new-password"
           onChangeText={(value) => setPasswordForm((current) => ({ ...current, newPassword: value }))}
           placeholder="새 비밀번호"
           placeholderTextColor="rgba(71, 71, 71, 0.42)"
           secureTextEntry
           style={styles.input}
+          textContentType="newPassword"
           value={passwordForm.newPassword}
         />
         <TextInput
+          autoComplete="new-password"
+          nativeID="settings-confirm-password"
           onChangeText={(value) => setPasswordForm((current) => ({ ...current, confirmPassword: value }))}
           placeholder="새 비밀번호 확인"
           placeholderTextColor="rgba(71, 71, 71, 0.42)"
           secureTextEntry
           style={styles.input}
+          textContentType="newPassword"
           value={passwordForm.confirmPassword}
         />
         <Text style={styles.helperText}>영문과 숫자를 포함해 8자 이상 입력해주세요.</Text>
