@@ -50,6 +50,7 @@ public class SecurityConfig {
 
                         // 할 일 API 개발/테스트용 임시 허용
                         .requestMatchers("/api/tasks/**").permitAll()
+                        .requestMatchers("/api/home/**").permitAll()
 
                         // Swagger 문서 접근 허용
                         .requestMatchers(
