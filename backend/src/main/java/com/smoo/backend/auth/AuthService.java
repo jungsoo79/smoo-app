@@ -4,6 +4,8 @@ import com.smoo.backend.auth.dto.LoginRequest;
 import com.smoo.backend.auth.dto.LoginResponse;
 import com.smoo.backend.auth.dto.SignupRequest;
 import com.smoo.backend.auth.dto.SignupResponse;
+import com.smoo.backend.common.exception.CustomException;
+import com.smoo.backend.common.exception.ErrorCode;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -52,9 +54,9 @@ public class AuthService {
         } catch (HttpClientErrorException e) {
             String errorBody = e.getResponseBodyAsString();
             if (errorBody.contains("Invalid login credentials")) {
-                throw new RuntimeException("INVALID_CREDENTIALS");
+                throw new CustomException(ErrorCode.INVALID_CREDENTIALS);
             } else {
-                throw new RuntimeException("LOGIN_FAILED");
+                throw new CustomException(ErrorCode.LOGIN_FAILED);
             }
         }
     }
@@ -72,7 +74,7 @@ public class AuthService {
         try {
             restTemplate.postForEntity(url, entity, Void.class);
         } catch (HttpClientErrorException e) {
-            throw new RuntimeException("LOGOUT_FAILED");
+            throw new CustomException(ErrorCode.LOGOUT_FAILED);
         }
     }
 
@@ -108,18 +110,17 @@ public class AuthService {
         } catch (HttpClientErrorException e) {
             String errorBody = e.getResponseBodyAsString();
             if (errorBody.contains("already registered")) {
-                throw new RuntimeException("EMAIL_ALREADY_EXISTS");
+                throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS);
             } else if (errorBody.contains("weak_password")) {
-                throw new RuntimeException("WEAK_PASSWORD");
+                throw new CustomException(ErrorCode.WEAK_PASSWORD);
             } else if (errorBody.contains("rate limit")) {
-                throw new RuntimeException("EMAIL_RATE_LIMIT");
-            } else if (errorBody.contains("invalid format")) {
-                throw new RuntimeException("INVALID_EMAIL");
+                throw new CustomException(ErrorCode.EMAIL_RATE_LIMIT);
+            } else if (errorBody.contains("email_address_invalid")) {
+                throw new CustomException(ErrorCode.INVALID_EMAIL);
             } else {
-                throw new RuntimeException("SIGNUP_FAILED");
+                throw new CustomException(ErrorCode.SIGNUP_FAILED);
             }
         }
-        
     }
 
     public void verifyEmail(String email, String token) {
@@ -141,12 +142,41 @@ public class AuthService {
         } catch (HttpClientErrorException e) {
             String errorBody = e.getResponseBodyAsString();
             if (errorBody.contains("Token has expired")) {
-                throw new RuntimeException("OTP_EXPIRED");
+                throw new CustomException(ErrorCode.OTP_EXPIRED);
             } else if (errorBody.contains("invalid")) {
-                throw new RuntimeException("OTP_INVALID");
+                throw new CustomException(ErrorCode.OTP_INVALID);
             } else {
-                throw new RuntimeException("VERIFY_FAILED");
+                throw new CustomException(ErrorCode.VERIFY_FAILED);
             }
+        }
+    }
+
+    public LoginResponse refresh(String refreshToken) {
+        String url = supabaseUrl + "/auth/v1/token?grant_type=refresh_token";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("apikey", supabaseAnonKey);
+
+        Map<String, String> body = new HashMap<>();
+        body.put("refresh_token", refreshToken);
+
+        HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
+
+        try {
+            ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
+            Map<String, Object> responseBody = response.getBody();
+
+            LoginResponse loginResponse = new LoginResponse();
+            loginResponse.setAccessToken((String) responseBody.get("access_token"));
+            loginResponse.setRefreshToken((String) responseBody.get("refresh_token"));
+            loginResponse.setTokenType((String) responseBody.get("token_type"));
+            loginResponse.setExpiresIn(((Number) responseBody.get("expires_in")).longValue());
+
+            return loginResponse;
+
+        } catch (HttpClientErrorException e) {
+            throw new CustomException(ErrorCode.INVALID_REFRESH_TOKEN);
         }
     }
 }
