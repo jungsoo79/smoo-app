@@ -28,6 +28,9 @@ public enum ErrorCode {
     OTP_EXPIRED(HttpStatus.BAD_REQUEST, "OTP_EXPIRED", "인증 코드가 만료되었습니다."),
     OTP_INVALID(HttpStatus.BAD_REQUEST, "OTP_INVALID", "인증 코드가 올바르지 않습니다."),
     VERIFY_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "VERIFY_FAILED", "이메일 인증에 실패했습니다."),
+    // Password
+    PASSWORD_RESET_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "PASSWORD_RESET_FAILED", "비밀번호 재설정 코드 발송에 실패했습니다."),
+    PASSWORD_UPDATE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "PASSWORD_UPDATE_FAILED", "새 비밀번호 변경에 실패했습니다."),
 
 
     // Settings

@@ -179,4 +179,86 @@ public class AuthService {
             throw new CustomException(ErrorCode.INVALID_REFRESH_TOKEN);
         }
     }
+
+    public void forgotPassword(String email) {
+        String url = supabaseUrl + "/auth/v1/otp";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("apikey", supabaseAnonKey);
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("email", email);
+        body.put("create_user", false);
+
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+
+        try {
+            restTemplate.postForEntity(url, entity, Map.class);
+        } catch (HttpClientErrorException e) {
+            String errorBody = e.getResponseBodyAsString();
+            if (errorBody.contains("rate limit")) {
+                throw new CustomException(ErrorCode.EMAIL_RATE_LIMIT);
+            } else if (errorBody.contains("email_address_invalid")) {
+                throw new CustomException(ErrorCode.INVALID_EMAIL);
+            } else {
+                throw new CustomException(ErrorCode.PASSWORD_RESET_FAILED);
+            }
+        }
+    }
+
+    public String verifyPasswordOtp(String email, String token) {
+        String url = supabaseUrl + "/auth/v1/verify";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("apikey", supabaseAnonKey);
+
+        Map<String, String> body = new HashMap<>();
+        body.put("type", "recovery");
+        body.put("email", email);
+        body.put("token", token);
+
+        HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
+
+        try {
+            ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
+            Map<String, Object> responseBody = response.getBody();
+            return (String) responseBody.get("access_token");
+        } catch (HttpClientErrorException e) {
+            String errorBody = e.getResponseBodyAsString();
+            if (errorBody.contains("Token has expired")) {
+                throw new CustomException(ErrorCode.OTP_EXPIRED);
+            } else if (errorBody.contains("invalid")) {
+                throw new CustomException(ErrorCode.OTP_INVALID);
+            } else {
+                throw new CustomException(ErrorCode.VERIFY_FAILED);
+            }
+        }
+    }
+
+    public void resetPassword(String accessToken, String newPassword) {
+        String url = supabaseUrl + "/auth/v1/user";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("apikey", supabaseAnonKey);
+        headers.setBearerAuth(accessToken);
+
+        Map<String, String> body = new HashMap<>();
+        body.put("password", newPassword);
+
+        HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
+
+        try {
+            restTemplate.exchange(url, HttpMethod.PUT, entity, Map.class);
+        } catch (HttpClientErrorException e) {
+            String errorBody = e.getResponseBodyAsString();
+            if (errorBody.contains("weak_password")) {
+                throw new CustomException(ErrorCode.WEAK_PASSWORD);
+            } else {
+                throw new CustomException(ErrorCode.PASSWORD_UPDATE_FAILED);
+            }
+        }
+    }
 }
