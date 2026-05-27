@@ -6,6 +6,8 @@ import { Calendar, type DateData } from 'react-native-calendars';
 import { AppBottomNav, AppFloatingActionButton, AppTopBar } from '@/components/app-chrome';
 import { AppColors, AppTypography } from '@/constants/appStyles';
 import { AddSheet } from '@/features/calendar/components/AddSheet';
+import { calendarEventsByDate } from '@/features/calendar/mock';
+import type { CalendarEvent, CalendarEventOccurrence, CalendarEventsByDate } from '@/features/calendar/types';
 
 type ChipTone = 'light' | 'medium' | 'darkGray' | 'black' | 'red';
 type CalendarChipSegment = 'single' | 'start' | 'middle' | 'end';
@@ -23,26 +25,6 @@ const initialDate = toLocalDateString(new Date());
 
 const weekdays = ['월', '화', '수', '목', '금', '토', '일'];
 const koreanWeekdays = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
-
-type CalendarEvent = {
-  id: string;
-  category: string;
-  categoryColor?: string;
-  date: string;
-  detail: string;
-  endDate: string;
-  endTime: { hour: number; meridiem: 'AM' | 'PM'; minute: number };
-  isAllDay: boolean;
-  startTime: { hour: number; meridiem: 'AM' | 'PM'; minute: number };
-  title: string;
-};
-
-type CalendarEventOccurrence = CalendarEvent & {
-  displayIsAllDay: boolean;
-  displayTime: CalendarEvent['startTime'];
-};
-
-type EventsByDate = Record<string, CalendarEvent[]>;
 
 function addMonths(dateString: string, count: number) {
   const date = new Date(`${dateString}T00:00:00`);
@@ -68,6 +50,16 @@ function getDatesBetween(startDate: string, endDate: string) {
   }
 
   return dates;
+}
+
+function getWeekStartDate(dateString: string) {
+  const date = new Date(`${dateString}T00:00:00`);
+  const day = date.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+
+  date.setDate(date.getDate() + mondayOffset);
+
+  return toLocalDateString(date);
 }
 
 function formatMonthTitle(dateString: string) {
@@ -163,17 +155,11 @@ function getCalendarChip(event: CalendarEvent, dateString: string, index: number
   };
 }
 
-function getCalendarChipsByDate(eventsByDate: EventsByDate): Record<string, Array<CalendarChip | null>> {
+function getCalendarChipsByDate(eventsByDate: CalendarEventsByDate): Record<string, Array<CalendarChip | null>> {
   const uniqueEvents = Array.from(
     new Map(Object.values(eventsByDate).flat().map((event) => [event.id, event])).values()
-  ).sort((first, second) => {
-    const firstIsRange = first.date !== first.endDate;
-    const secondIsRange = second.date !== second.endDate;
-
-    if (firstIsRange !== secondIsRange) {
-      return firstIsRange ? -1 : 1;
-    }
-
+  );
+  const rangeEvents = uniqueEvents.filter((event) => event.date !== event.endDate).sort((first, second) => {
     if (first.date !== second.date) {
       return first.date.localeCompare(second.date);
     }
@@ -184,12 +170,20 @@ function getCalendarChipsByDate(eventsByDate: EventsByDate): Record<string, Arra
 
     return getTimeOrder(first.startTime) - getTimeOrder(second.startTime);
   });
+  const singleEvents = uniqueEvents.filter((event) => event.date === event.endDate).sort((first, second) => {
+    if (first.date !== second.date) {
+      return first.date.localeCompare(second.date);
+    }
+
+    return getTimeOrder(first.startTime) - getTimeOrder(second.startTime);
+  });
   const lanesByDate: Record<string, Array<CalendarChip | null>> = {};
+  const rangeLanesByWeek: Record<string, Set<number>> = {};
   const totalsByDate = Object.fromEntries(
     Object.entries(eventsByDate).map(([date, events]) => [date, events.length])
   ) as Record<string, number>;
 
-  uniqueEvents.forEach((event) => {
+  rangeEvents.forEach((event) => {
     const dates = getDatesBetween(event.date, event.endDate);
     const availableLane = [0, 1, 2].find((lane) => dates.every((date) => !lanesByDate[date]?.[lane]));
 
@@ -201,6 +195,23 @@ function getCalendarChipsByDate(eventsByDate: EventsByDate): Record<string, Arra
       lanesByDate[date] = lanesByDate[date] ?? [];
       lanesByDate[date][availableLane] = getCalendarChip(event, date, availableLane);
     });
+
+    Array.from(new Set(dates.map(getWeekStartDate))).forEach((weekStartDate) => {
+      rangeLanesByWeek[weekStartDate] = rangeLanesByWeek[weekStartDate] ?? new Set<number>();
+      rangeLanesByWeek[weekStartDate].add(availableLane);
+    });
+  });
+
+  singleEvents.forEach((event) => {
+    const reservedRangeLanes = rangeLanesByWeek[getWeekStartDate(event.date)] ?? new Set<number>();
+    const availableLane = [0, 1, 2].find((lane) => !reservedRangeLanes.has(lane) && !lanesByDate[event.date]?.[lane]);
+
+    if (availableLane === undefined) {
+      return;
+    }
+
+    lanesByDate[event.date] = lanesByDate[event.date] ?? [];
+    lanesByDate[event.date][availableLane] = getCalendarChip(event, event.date, availableLane);
   });
 
   return Object.fromEntries(
@@ -250,11 +261,34 @@ function getMutedContrastTextColor(hexColor?: string) {
   return getContrastTextColor(hexColor) === '#FFFFFF' ? 'rgba(255, 255, 255, 0.78)' : 'rgba(23, 23, 23, 0.62)';
 }
 
+function removeEventById(eventsByDate: CalendarEventsByDate, eventId: string) {
+  return Object.fromEntries(
+    Object.entries(eventsByDate)
+      .map(([date, events]) => [date, events.filter((event) => event.id !== eventId)] as const)
+      .filter(([, events]) => events.length > 0)
+  ) as CalendarEventsByDate;
+}
+
+function addEventToDates(eventsByDate: CalendarEventsByDate, event: CalendarEvent) {
+  return {
+    ...eventsByDate,
+    ...Object.fromEntries(
+      getDatesBetween(event.date, event.endDate).map((date) => [
+        date,
+        [...(eventsByDate[date] ?? []), event].sort((first, second) =>
+          sortCalendarEvents(getEventOccurrence(first, date), getEventOccurrence(second, date))
+        ),
+      ])
+    ),
+  } as CalendarEventsByDate;
+}
+
 export default function CalendarScreen() {
   const [currentDate, setCurrentDate] = useState(initialDate);
   const [selectedDate, setSelectedDate] = useState(initialDate);
-  const [eventsByDate, setEventsByDate] = useState<EventsByDate>({});
+  const [eventsByDate, setEventsByDate] = useState<CalendarEventsByDate>(calendarEventsByDate);
   const [isAddSheetVisible, setAddSheetVisible] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const selectedEvents = useMemo(
     () => (eventsByDate[selectedDate] ?? []).map((event) => getEventOccurrence(event, selectedDate)).sort(sortCalendarEvents),
     [eventsByDate, selectedDate]
@@ -353,38 +387,60 @@ export default function CalendarScreen() {
               ) : null}
 
               {selectedEvents.map((event) => (
-                <CalendarEventRow event={event} key={event.id} />
+                <CalendarEventRow
+                  event={event}
+                  key={event.id}
+                  onPress={() => {
+                    setEditingEvent(event);
+                    setAddSheetVisible(true);
+                  }}
+                />
               ))}
             </View>
           </View>
         </ScrollView>
       </View>
 
-      <AppFloatingActionButton label="일정 추가" onPress={() => setAddSheetVisible(true)} />
+      <AppFloatingActionButton
+        label="일정 추가"
+        onPress={() => {
+          setEditingEvent(null);
+          setAddSheetVisible(true);
+        }}
+      />
 
       <AddSheet
+        initialEvent={editingEvent}
         initialDate={selectedDate}
         visible={isAddSheetVisible}
-        onClose={() => setAddSheetVisible(false)}
+        onClose={() => {
+          setAddSheetVisible(false);
+          setEditingEvent(null);
+        }}
+        onDelete={(eventId) => {
+          setEventsByDate((events) => removeEventById(events, eventId));
+          setEditingEvent(null);
+        }}
         onSave={(event) => {
           const nextEvent: CalendarEvent = {
             ...event,
             id: `event-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           };
 
-          setEventsByDate((events) => ({
-            ...events,
-            ...Object.fromEntries(
-              getDatesBetween(event.date, event.endDate).map((date) => [
-                date,
-                [...(events[date] ?? []), nextEvent].sort((first, second) =>
-                  sortCalendarEvents(getEventOccurrence(first, date), getEventOccurrence(second, date))
-                ),
-              ])
-            ),
-          } as EventsByDate));
+          setEventsByDate((events) => addEventToDates(events, nextEvent));
           setSelectedDate(event.date);
           setCurrentDate(event.date);
+        }}
+        onUpdate={(eventId, event) => {
+          const nextEvent: CalendarEvent = {
+            ...event,
+            id: eventId,
+          };
+
+          setEventsByDate((events) => addEventToDates(removeEventById(events, eventId), nextEvent));
+          setSelectedDate(event.date);
+          setCurrentDate(event.date);
+          setEditingEvent(null);
         }}
       />
 
@@ -393,12 +449,15 @@ export default function CalendarScreen() {
   );
 }
 
-function CalendarEventRow({ event }: { event: CalendarEventOccurrence }) {
+function CalendarEventRow({ event, onPress }: { event: CalendarEventOccurrence; onPress: () => void }) {
   const titleColor = getContrastTextColor(event.categoryColor);
   const detailColor = getMutedContrastTextColor(event.categoryColor);
 
   return (
-    <View style={[styles.eventRow, event.displayIsAllDay && styles.allDayEventRow]}>
+    <TouchableOpacity
+      activeOpacity={0.82}
+      onPress={onPress}
+      style={[styles.eventRow, event.displayIsAllDay && styles.allDayEventRow]}>
       {event.displayIsAllDay ? null : (
         <View style={styles.eventTime}>
           <Text style={styles.eventHour}>{formatEventTime(event.displayTime)}</Text>
@@ -414,7 +473,7 @@ function CalendarEventRow({ event }: { event: CalendarEventOccurrence }) {
         <Text style={[styles.eventTitle, { color: titleColor }]}>{event.title}</Text>
         {event.detail ? <Text style={[styles.eventDetail, { color: detailColor }]}>{event.detail}</Text> : null}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -451,9 +510,8 @@ function CalendarDay({
       <View style={styles.chipStack}>
         {chips?.map((chip, index) =>
           chip ? (
-            <Text
+            <View
               key={`${date?.dateString}-${chip.id ?? chip.label}-${index}`}
-              numberOfLines={1}
               style={[
                 styles.calendarChip,
                 chipStyles[chip.tone],
@@ -464,12 +522,22 @@ function CalendarDay({
                 chip.color
                   ? {
                       backgroundColor: chip.color,
-                      color: getContrastTextColor(chip.color),
                     }
                   : null,
               ]}>
-              {chip.label}
-            </Text>
+              {chip.label.trim() ? (
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.calendarChipText,
+                    {
+                      color: chip.color ? getContrastTextColor(chip.color) : chipStyles[chip.tone].color,
+                    },
+                  ]}>
+                  {chip.label}
+                </Text>
+              ) : null}
+            </View>
           ) : (
             <View key={`${date?.dateString}-spacer-${index}`} style={styles.calendarChipSpacer} />
           )
@@ -623,10 +691,16 @@ const styles = StyleSheet.create({
   calendarChip: {
     width: '86%',
     maxWidth: 40,
+    height: 16,
     borderRadius: 2,
-    paddingVertical: 2,
     paddingHorizontal: 2,
     overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarChipText: {
+    width: '100%',
+    backgroundColor: 'transparent',
     fontSize: 8,
     lineHeight: 12,
     fontWeight: '500',
