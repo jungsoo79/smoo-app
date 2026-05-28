@@ -1,6 +1,7 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   FlatList,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -16,8 +17,19 @@ import DraggableFlatList, { type RenderItemParams } from 'react-native-draggable
 import { AppBottomNav, AppFloatingActionButton, AppTopBar } from '@/components/app-chrome';
 import { AppColors, AppTypography } from '@/constants/appStyles';
 import { AddTodoSheet } from '@/features/checklist/components/AddTodoSheet';
-import { checklistTaskSectionsByDate } from '@/features/checklist/mock';
-import type { Task, TaskSection, TaskSectionsByDate } from '@/features/checklist/types';
+import {
+  completeTodo,
+  createChecklistCategory,
+  createTodo,
+  deleteChecklistCategory,
+  deleteTodo as deleteTodoById,
+  getChecklistCategories,
+  getTaskSectionsByDate,
+  incompleteTodo,
+  reorderTasks,
+  updateTodo as updateTodoById,
+} from '@/features/checklist/api';
+import type { ChecklistCategory, Task, TaskSection, TaskSectionsByDate } from '@/features/checklist/types';
 
 const koreanWeekdays = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -87,7 +99,7 @@ type EditingTask = Task & {
   date: string;
 };
 
-const initialTaskSectionsByDate = checklistTaskSectionsByDate;
+const initialTaskSectionsByDate: TaskSectionsByDate = {};
 
 function removeTaskFromSections(sectionsByDate: TaskSectionsByDate, taskId: string) {
   return Object.fromEntries(
@@ -133,11 +145,24 @@ function addTaskToSection(
   };
 }
 
+function replaceTaskInSections(sections: TaskSection[], nextTask: Task) {
+  return sections.map((section) => ({
+    ...section,
+    tasks: section.tasks.map((task) => (task.id === nextTask.id ? { ...task, ...nextTask } : task)),
+  }));
+}
+
+function getFlattenedTasks(sections: TaskSection[]) {
+  return sections.flatMap((section) => section.tasks);
+}
+
 export default function ChecklistScreen() {
   const { width: viewportWidth } = useWindowDimensions();
   const datePickerRef = useRef<FlatList<DateOption>>(null);
+  const taskRequestIdRef = useRef(0);
   const [isAddSheetVisible, setAddSheetVisible] = useState(false);
   const [editingTask, setEditingTask] = useState<EditingTask | null>(null);
+  const [categories, setCategories] = useState<ChecklistCategory[]>([]);
   const [taskSectionsByDate, setTaskSectionsByDate] = useState(initialTaskSectionsByDate);
   const [selectedDate, setSelectedDate] = useState(todayString);
   const [scrollMonthLabel, setScrollMonthLabel] = useState(getMonthLabel(todayString));
@@ -147,6 +172,34 @@ export default function ChecklistScreen() {
   const visibleDateCount = getVisibleDateCount(safeViewportWidth);
   const sideDateCount = Math.floor(visibleDateCount / 2);
   const datePillSlotWidth = Math.max(1, safeViewportWidth / visibleDateCount);
+
+  const refreshTasksForDate = useCallback(async (dateString: string) => {
+    const requestId = taskRequestIdRef.current + 1;
+    taskRequestIdRef.current = requestId;
+
+    try {
+      const sections = await getTaskSectionsByDate(dateString);
+
+      if (taskRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      setTaskSectionsByDate((sectionsByDate) => ({
+        ...sectionsByDate,
+        [dateString]: sections,
+      }));
+    } catch (error) {
+      console.error('Failed to load tasks', error);
+    }
+  }, []);
+
+  const refreshCategories = useCallback(async () => {
+    try {
+      setCategories(await getChecklistCategories());
+    } catch (error) {
+      console.error('Failed to load task categories', error);
+    }
+  }, []);
 
   const scrollToSelectedDate = useCallback(
     (dateString: string, animated: boolean) => {
@@ -178,6 +231,14 @@ export default function ChecklistScreen() {
       scrollToSelectedDate(selectedDate, false);
     });
   }, [scrollToSelectedDate, selectedDate]);
+
+  useEffect(() => {
+    void refreshCategories();
+  }, [refreshCategories]);
+
+  useEffect(() => {
+    void refreshTasksForDate(selectedDate);
+  }, [refreshTasksForDate, selectedDate]);
 
   const selectDate = useCallback(
     (dateString: string) => {
@@ -234,7 +295,15 @@ export default function ChecklistScreen() {
     [selectDate, selectedDate]
   );
 
-  const toggleTaskDone = useCallback((sectionTitle: string, taskId: string) => {
+  const toggleTaskDone = useCallback(async (sectionTitle: string, taskId: string) => {
+    const currentTask = taskSectionsByDate[selectedDate]
+      ?.find((section) => section.title === sectionTitle)
+      ?.tasks.find((task) => task.id === taskId);
+
+    if (!currentTask) {
+      return;
+    }
+
     setTaskSectionsByDate((sectionsByDate) => {
       const currentSections = sectionsByDate[selectedDate] ?? [];
 
@@ -259,25 +328,43 @@ export default function ChecklistScreen() {
         }),
       };
     });
-  }, [selectedDate]);
+
+    try {
+      const nextTask = currentTask.done ? await incompleteTodo(taskId) : await completeTodo(taskId);
+
+      setTaskSectionsByDate((sectionsByDate) => ({
+        ...sectionsByDate,
+        [selectedDate]: replaceTaskInSections(sectionsByDate[selectedDate] ?? [], nextTask),
+      }));
+    } catch (error) {
+      console.error('Failed to toggle task completion', error);
+      void refreshTasksForDate(selectedDate);
+    }
+  }, [refreshTasksForDate, selectedDate, taskSectionsByDate]);
 
   const updateSectionTasks = useCallback((sectionTitle: string, tasks: Task[]) => {
     setTaskSectionsByDate((sectionsByDate) => {
       const currentSections = sectionsByDate[selectedDate] ?? [];
+      const nextSections = currentSections.map((section) =>
+        section.title === sectionTitle
+          ? {
+              ...section,
+              tasks,
+            }
+          : section
+      );
+
+      void reorderTasks(selectedDate, getFlattenedTasks(nextSections)).catch((error) => {
+        console.error('Failed to reorder tasks', error);
+        void refreshTasksForDate(selectedDate);
+      });
 
       return {
         ...sectionsByDate,
-        [selectedDate]: currentSections.map((section) =>
-          section.title === sectionTitle
-            ? {
-                ...section,
-                tasks,
-              }
-            : section
-        ),
+        [selectedDate]: nextSections,
       };
     });
-  }, [selectedDate]);
+  }, [refreshTasksForDate, selectedDate]);
 
   const updateTaskSections = useCallback((sections: TaskSection[]) => {
     setTaskSectionsByDate((sectionsByDate) => ({
@@ -289,26 +376,58 @@ export default function ChecklistScreen() {
   const saveTodo = useCallback(
     ({
       category,
+      categoryId,
       date,
       memo,
       title,
     }: {
       category: string;
+      categoryId?: number | null;
       date: string;
       memo?: string;
       title: string;
     }) => {
-      const sectionTitle = category === '없음' ? '일상' : category;
-      const nextTask: Task = {
-        id: `todo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      const selectedCategory = categories.find((item) => item.id === categoryId || item.name === category);
+      const tempTaskId = `temp-${Date.now()}`;
+      const optimisticTask: Task = {
+        id: tempTaskId,
         title,
         detail: memo,
+        done: false,
+        categoryColor: selectedCategory?.color,
+        categoryId: categoryId ?? null,
+        categoryName: category,
       };
 
-      setTaskSectionsByDate((sectionsByDate) => addTaskToSection(sectionsByDate, date, sectionTitle, nextTask));
+      setTaskSectionsByDate((sectionsByDate) => addTaskToSection(sectionsByDate, date, category, optimisticTask));
       selectDate(date);
+
+      void createTodo({
+        category,
+        categoryId,
+        date,
+        memo,
+        title,
+      })
+        .then((createdTodo) => {
+          setTaskSectionsByDate((sectionsByDate) =>
+            addTaskToSection(
+              removeTaskFromSections(sectionsByDate, tempTaskId),
+              createdTodo.date,
+              createdTodo.category,
+              createdTodo
+            )
+          );
+
+          return refreshTasksForDate(date);
+        })
+        .catch((error) => {
+          console.error('Failed to create task', error);
+          setTaskSectionsByDate((sectionsByDate) => removeTaskFromSections(sectionsByDate, tempTaskId));
+          Alert.alert('추가 실패', '할 일을 저장하지 못했습니다. 백엔드 연결 상태를 확인해 주세요.');
+        });
     },
-    [selectDate]
+    [categories, refreshTasksForDate, selectDate]
   );
 
   const updateTodo = useCallback(
@@ -316,37 +435,46 @@ export default function ChecklistScreen() {
       taskId: string,
       {
         category,
+        categoryId,
         date,
         memo,
         title,
       }: {
         category: string;
+        categoryId?: number | null;
         date: string;
         memo?: string;
         title: string;
       }
     ) => {
-      const sectionTitle = category === '없음' ? '일상' : category;
-      const nextTask: Task = {
-        id: taskId,
+      void updateTodoById(taskId, {
+        category,
+        categoryId,
+        date,
+        memo,
         title,
-        detail: memo,
-        badge: editingTask?.badge,
-        done: editingTask?.done,
-      };
-
-      setTaskSectionsByDate((sectionsByDate) =>
-        addTaskToSection(removeTaskFromSections(sectionsByDate, taskId), date, sectionTitle, nextTask)
-      );
-      setEditingTask(null);
-      selectDate(date);
+      })
+        .then(() => {
+          setEditingTask(null);
+          selectDate(date);
+          return refreshTasksForDate(date);
+        })
+        .catch((error) => {
+          console.error('Failed to update task', error);
+        });
     },
-    [editingTask?.badge, editingTask?.done, selectDate]
+    [refreshTasksForDate, selectDate]
   );
 
   const deleteTodo = useCallback((taskId: string) => {
-    setTaskSectionsByDate((sectionsByDate) => removeTaskFromSections(sectionsByDate, taskId));
-    setEditingTask(null);
+    void deleteTodoById(taskId)
+      .then(() => {
+        setTaskSectionsByDate((sectionsByDate) => removeTaskFromSections(sectionsByDate, taskId));
+        setEditingTask(null);
+      })
+      .catch((error) => {
+        console.error('Failed to delete task', error);
+      });
   }, []);
 
   const openTaskEditor = useCallback(
@@ -470,11 +598,13 @@ export default function ChecklistScreen() {
       <AppFloatingActionButton label="할 일 추가" onPress={openAddTodoSheet} />
 
       <AddTodoSheet
+        categories={categories}
         initialDate={selectedDate}
         initialTodo={
           editingTask
             ? {
                 category: editingTask.category,
+                categoryId: editingTask.categoryId,
                 date: editingTask.date,
                 id: editingTask.id,
                 memo: editingTask.detail,
@@ -483,6 +613,32 @@ export default function ChecklistScreen() {
             : null
         }
         visible={isAddSheetVisible}
+        onCategoryCreate={async (category) => {
+          try {
+            const nextCategory = await createChecklistCategory({
+              color: category.color,
+              name: category.label,
+            });
+
+            setCategories((currentCategories) => [...currentCategories, nextCategory]);
+
+            return nextCategory;
+          } catch (error) {
+            console.error('Failed to create task category', error);
+
+            return null;
+          }
+        }}
+        onCategoryDelete={(categoryId) => {
+          void deleteChecklistCategory(categoryId)
+            .then(() => {
+              setCategories((currentCategories) => currentCategories.filter((category) => category.id !== categoryId));
+              void refreshTasksForDate(selectedDate);
+            })
+            .catch((error) => {
+              console.error('Failed to delete task category', error);
+            });
+        }}
         onClose={closeTodoSheet}
         onDelete={deleteTodo}
         onSave={saveTodo}

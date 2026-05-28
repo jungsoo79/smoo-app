@@ -1,128 +1,216 @@
-import { checklistCategories, checklistTaskSectionsByDate } from './mock';
 import type { ChecklistCategory, Task, TaskSection, TaskSectionsByDate, TodoPayload, TodoWithMeta } from './types';
 
-let categories = [...checklistCategories];
-let taskSectionsByDate: TaskSectionsByDate = { ...checklistTaskSectionsByDate };
+const DEFAULT_API_BASE_URL = 'http://localhost:8080';
+const DEFAULT_USER_ID = '00000000-0000-0000-0000-000000000001';
 
-function getSectionTitle(category: string) {
-  return category === '없음' ? '일상' : category;
-}
+const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+const apiBaseUrl = env?.EXPO_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
+const userId = env?.EXPO_PUBLIC_MOCK_USER_ID ?? DEFAULT_USER_ID;
 
-function removeTaskFromSections(sectionsByDate: TaskSectionsByDate, taskId: string) {
-  return Object.fromEntries(
-    Object.entries(sectionsByDate)
-      .map(([date, sections]) => [
-        date,
-        sections
-          .map((section) => ({
-            ...section,
-            tasks: section.tasks.filter((task) => task.id !== taskId),
-          }))
-          .filter((section) => section.tasks.length > 0),
-      ])
-      .filter(([, sections]) => sections.length > 0)
-  ) as TaskSectionsByDate;
-}
+type ApiResponse<T> = {
+  code?: string;
+  data: T;
+  message?: string;
+  status?: number;
+  success?: boolean;
+};
 
-function addTaskToSection(sectionsByDate: TaskSectionsByDate, date: string, sectionTitle: string, task: Task) {
-  const currentSections = sectionsByDate[date] ?? [];
-  const sectionExists = currentSections.some((section) => section.title === sectionTitle);
+type TaskResponse = {
+  categoryColor?: string | null;
+  categoryId?: number | null;
+  categoryName?: string | null;
+  completed: boolean;
+  completedAt?: string | null;
+  dueDate: string;
+  id: number;
+  memo?: string | null;
+  sortOrder?: number | null;
+  status?: string;
+  title: string;
+};
 
+type TaskCategoryGroupResponse = {
+  categoryColor?: string | null;
+  categoryId?: number | null;
+  categoryName?: string | null;
+  tasks: TaskResponse[];
+};
+
+type DailyTaskResponse = {
+  categories: TaskCategoryGroupResponse[];
+  date: string;
+};
+
+type TaskCategoryResponse = {
+  color?: string | null;
+  id: number;
+  isDefault: boolean;
+  name: string;
+};
+
+type TaskRequestBody = {
+  categoryId?: number | null;
+  dueDate: string;
+  memo?: string;
+  title: string;
+};
+
+function getHeaders() {
   return {
-    ...sectionsByDate,
-    [date]: sectionExists
-      ? currentSections.map((section) =>
-          section.title === sectionTitle
-            ? {
-                ...section,
-                tasks: [...section.tasks, task],
-              }
-            : section
-        )
-      : [
-          ...currentSections,
-          {
-            title: sectionTitle,
-            tasks: [task],
-          },
-        ],
+    'Content-Type': 'application/json',
+    'X-USER-ID': userId,
+  };
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    ...init,
+    headers: {
+      ...getHeaders(),
+      ...init?.headers,
+    },
+  });
+  const text = await response.text();
+  const body = text ? (JSON.parse(text) as ApiResponse<T>) : undefined;
+
+  if (!response.ok) {
+    throw new Error(body?.message ?? body?.code ?? 'TASK_API_REQUEST_FAILED');
+  }
+
+  return body?.data as T;
+}
+
+function toTask(response: TaskResponse): Task {
+  return {
+    id: String(response.id),
+    title: response.title,
+    detail: response.memo ?? undefined,
+    done: response.completed,
+    categoryColor: response.categoryColor ?? undefined,
+    categoryId: response.categoryId ?? null,
+    categoryName: response.categoryName ?? null,
+    sortOrder: response.sortOrder ?? 0,
+  };
+}
+
+function toCategory(response: TaskCategoryResponse): ChecklistCategory {
+  return {
+    id: response.id,
+    name: response.name,
+    color: response.color ?? undefined,
+    isDefault: response.isDefault,
+  };
+}
+
+function toTaskSections(response: DailyTaskResponse): TaskSection[] {
+  return response.categories.map((category) => ({
+    title: category.categoryName ?? '일상',
+    tasks: category.tasks.map(toTask),
+  }));
+}
+
+function toTaskRequestBody(payload: TodoPayload): TaskRequestBody {
+  return {
+    title: payload.title,
+    memo: payload.memo,
+    dueDate: payload.date,
+    categoryId: payload.categoryId ?? null,
   };
 }
 
 export async function getTaskSectionsByDateMap(): Promise<TaskSectionsByDate> {
-  return { ...taskSectionsByDate };
+  return {};
 }
 
 export async function getTaskSectionsByDate(date: string): Promise<TaskSection[]> {
-  return taskSectionsByDate[date] ?? [];
+  const response = await request<DailyTaskResponse>(`/api/tasks?date=${encodeURIComponent(date)}`);
+
+  return toTaskSections(response);
 }
 
 export async function createTodo(payload: TodoPayload): Promise<TodoWithMeta> {
-  const sectionTitle = getSectionTitle(payload.category);
-  const task: Task = {
-    id: `todo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    title: payload.title,
-    detail: payload.memo,
-  };
-
-  taskSectionsByDate = addTaskToSection(taskSectionsByDate, payload.date, sectionTitle, task);
+  const task = await request<TaskResponse>('/api/tasks', {
+    method: 'POST',
+    body: JSON.stringify(toTaskRequestBody(payload)),
+  });
 
   return {
-    ...task,
-    category: sectionTitle,
-    date: payload.date,
+    ...toTask(task),
+    category: task.categoryName ?? payload.category,
+    date: task.dueDate,
   };
 }
 
 export async function updateTodo(taskId: string, payload: TodoPayload): Promise<TodoWithMeta> {
-  const sectionTitle = getSectionTitle(payload.category);
-  const existingTask = Object.values(taskSectionsByDate)
-    .flatMap((sections) => sections.flatMap((section) => section.tasks))
-    .find((task) => task.id === taskId);
-  const task: Task = {
-    id: taskId,
-    title: payload.title,
-    detail: payload.memo,
-    badge: existingTask?.badge,
-    done: existingTask?.done,
-  };
-
-  taskSectionsByDate = addTaskToSection(removeTaskFromSections(taskSectionsByDate, taskId), payload.date, sectionTitle, task);
+  const task = await request<TaskResponse>(`/api/tasks/${taskId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(toTaskRequestBody(payload)),
+  });
 
   return {
-    ...task,
-    category: sectionTitle,
-    date: payload.date,
+    ...toTask(task),
+    category: task.categoryName ?? payload.category,
+    date: task.dueDate,
   };
 }
 
 export async function deleteTodo(taskId: string): Promise<void> {
-  taskSectionsByDate = removeTaskFromSections(taskSectionsByDate, taskId);
+  await request<void>(`/api/tasks/${taskId}`, {
+    method: 'DELETE',
+  });
 }
 
-export async function reorderTaskSections(date: string, sections: TaskSection[]): Promise<TaskSection[]> {
-  taskSectionsByDate = {
-    ...taskSectionsByDate,
-    [date]: sections,
-  };
+export async function completeTodo(taskId: string): Promise<Task> {
+  return toTask(
+    await request<TaskResponse>(`/api/tasks/${taskId}/complete`, {
+      method: 'PATCH',
+    })
+  );
+}
 
-  return sections;
+export async function incompleteTodo(taskId: string): Promise<Task> {
+  return toTask(
+    await request<TaskResponse>(`/api/tasks/${taskId}/incomplete`, {
+      method: 'PATCH',
+    })
+  );
+}
+
+export async function reorderTasks(date: string, tasks: Task[]): Promise<TaskSection[]> {
+  const response = await request<DailyTaskResponse>('/api/tasks/reorder', {
+    method: 'PATCH',
+    body: JSON.stringify({
+      date,
+      orders: tasks.map((task, index) => ({
+        taskId: Number(task.id),
+        sortOrder: index,
+      })),
+    }),
+  });
+
+  return toTaskSections(response);
 }
 
 export async function getChecklistCategories(): Promise<ChecklistCategory[]> {
-  return [...categories];
+  return (await request<TaskCategoryResponse[]>('/api/tasks/categories')).map(toCategory);
 }
 
 export async function createChecklistCategory(
   payload: Omit<ChecklistCategory, 'id' | 'isDefault'>
 ): Promise<ChecklistCategory> {
-  const category: ChecklistCategory = {
-    ...payload,
-    id: Math.max(0, ...categories.map((item) => item.id)) + 1,
-    isDefault: false,
-  };
+  const category = await request<TaskCategoryResponse>('/api/tasks/categories', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: payload.name,
+      color: payload.color,
+    }),
+  });
 
-  categories = [...categories, category];
+  return toCategory(category);
+}
 
-  return category;
+export async function deleteChecklistCategory(categoryId: number): Promise<void> {
+  await request<void>(`/api/tasks/categories/${categoryId}`, {
+    method: 'DELETE',
+  });
 }
