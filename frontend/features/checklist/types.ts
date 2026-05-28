@@ -10,7 +10,11 @@ export interface Task {
   title: string;
   detail?: string;
   badge?: string;
+  categoryColor?: string;
+  categoryId?: number | null;
+  categoryName?: string | null;
   done?: boolean;
+  sortOrder?: number;
 }
 
 export interface TaskSection {
@@ -22,6 +26,7 @@ export type TaskSectionsByDate = Record<string, TaskSection[]>;
 
 export interface TodoPayload {
   category: string;
+  categoryId?: number | null;
   date: string;
   memo?: string;
   title: string;

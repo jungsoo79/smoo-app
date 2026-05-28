@@ -625,29 +625,79 @@ function WheelColumn<T>({
   selectedValue: T;
 }) {
   const scrollRef = useRef<ScrollView>(null);
+  const isInteractingRef = useRef(false);
+  const displayValueRef = useRef(selectedValue);
+  const [displayValue, setDisplayValue] = useState(selectedValue);
   const selectedIndex = Math.max(
     0,
-    options.findIndex((option) => option === selectedValue)
+    options.findIndex((option) => option === displayValue)
   );
 
   useEffect(() => {
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollTo({ animated: false, y: selectedIndex * wheelItemHeight });
-    });
-  }, [selectedIndex]);
-
-  const handleScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const nextIndex = Math.max(
-      0,
-      Math.min(options.length - 1, Math.round(event.nativeEvent.contentOffset.y / wheelItemHeight))
-    );
-    const nextValue = options[nextIndex];
-
-    if (nextValue !== selectedValue) {
-      onChange(nextValue);
+    if (isInteractingRef.current) {
+      return;
     }
 
+    displayValueRef.current = selectedValue;
+    setDisplayValue(selectedValue);
+    requestAnimationFrame(() => {
+      const nextIndex = Math.max(
+        0,
+        options.findIndex((option) => option === selectedValue)
+      );
+
+      scrollRef.current?.scrollTo({ animated: false, y: nextIndex * wheelItemHeight });
+    });
+  }, [options, selectedValue]);
+
+  const getIndexFromOffset = (offsetY: number) =>
+    Math.max(0, Math.min(options.length - 1, Math.round(offsetY / wheelItemHeight)));
+
+  const updateDisplayValue = (nextIndex: number) => {
+    const nextValue = options[nextIndex];
+
+    if (nextValue === displayValueRef.current) {
+      return;
+    }
+
+    displayValueRef.current = nextValue;
+    setDisplayValue(nextValue);
+    onChange(nextValue);
+  };
+
+  const settleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const nextIndex = getIndexFromOffset(event.nativeEvent.contentOffset.y);
+
+    updateDisplayValue(nextIndex);
     scrollRef.current?.scrollTo({ animated: true, y: nextIndex * wheelItemHeight });
+
+    setTimeout(() => {
+      isInteractingRef.current = false;
+    }, 120);
+  };
+
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    updateDisplayValue(getIndexFromOffset(event.nativeEvent.contentOffset.y));
+  };
+
+  const handleScrollEndDrag = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const velocityY = event.nativeEvent.velocity?.y ?? 0;
+
+    if (Math.abs(velocityY) < 0.05) {
+      settleScroll(event);
+    }
+  };
+
+  const handleMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    settleScroll(event);
+  };
+
+  const handleScrollBeginDrag = () => {
+    isInteractingRef.current = true;
+  };
+
+  const handleTouchStart = () => {
+    isInteractingRef.current = true;
   };
 
   return (
@@ -657,8 +707,11 @@ function WheelColumn<T>({
       decelerationRate="fast"
       disableIntervalMomentum
       nestedScrollEnabled
-      onMomentumScrollEnd={handleScrollEnd}
-      onScrollEndDrag={handleScrollEnd}
+      onMomentumScrollEnd={handleMomentumScrollEnd}
+      onScroll={handleScroll}
+      onScrollBeginDrag={handleScrollBeginDrag}
+      onScrollEndDrag={handleScrollEndDrag}
+      onTouchStart={handleTouchStart}
       scrollEventThrottle={16}
       showsVerticalScrollIndicator={false}
       snapToAlignment="start"
@@ -666,7 +719,7 @@ function WheelColumn<T>({
       style={styles.wheelColumn}
       contentContainerStyle={styles.wheelColumnContent}>
       {options.map((option) => {
-        const isSelected = option === selectedValue;
+        const isSelected = option === displayValue;
 
         return (
           <View key={renderLabel(option)} style={styles.wheelOption}>

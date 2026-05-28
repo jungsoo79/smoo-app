@@ -17,35 +17,34 @@ import {
 
 import { CategoryAddModal } from '@/components/shared/CategoryAddModal';
 import { DatePickerPopup } from '@/components/shared/DatePickerPopup';
-import { checklistCategories } from '@/features/checklist/mock';
-import type { TodoPayload } from '@/features/checklist/types';
+import type { ChecklistCategory, TodoPayload } from '@/features/checklist/types';
 
 type AddTodoSheetProps = {
   initialDate: string;
   initialTodo?: {
     category: string;
+    categoryId?: number | null;
     date: string;
     id: string;
     memo?: string;
     title: string;
   } | null;
+  categories: ChecklistCategory[];
   visible: boolean;
   onClose: () => void;
+  onCategoryCreate?: (category: { color?: string; label: string }) => Promise<ChecklistCategory | null>;
+  onCategoryDelete?: (categoryId: number) => void;
   onDelete?: (todoId: string) => void;
   onSave: (todo: TodoPayload) => void;
   onUpdate?: (todoId: string, todo: TodoPayload) => void;
 };
 
 type PickerOption = {
+  categoryId?: number;
   color?: string;
   label: string;
   onPress?: () => void;
 };
-
-const defaultCategoryOptions = checklistCategories.map((category) => ({
-  color: category.color,
-  label: category.name,
-}));
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -56,10 +55,13 @@ function formatDatePill(dateString: string) {
 }
 
 export function AddTodoSheet({
+  categories,
   initialDate,
   initialTodo,
   visible,
   onClose,
+  onCategoryCreate,
+  onCategoryDelete,
   onDelete,
   onSave,
   onUpdate,
@@ -69,14 +71,26 @@ export function AddTodoSheet({
   const [title, setTitle] = useState('');
   const [memo, setMemo] = useState('');
   const [selectedDate, setSelectedDate] = useState(initialDate);
-  const [categoryOptions, setCategoryOptions] = useState(defaultCategoryOptions);
   const [isDatePickerVisible, setDatePickerVisible] = useState(false);
   const [category, setCategory] = useState('없음');
+  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [localCategoryOptions, setLocalCategoryOptions] = useState<PickerOption[]>([]);
   const [isCategoryPickerVisible, setCategoryPickerVisible] = useState(false);
   const [isCategoryAddVisible, setCategoryAddVisible] = useState(false);
   const [optionAnchor, setOptionAnchor] = useState<LayoutRectangle | null>(null);
   const [validationMessage, setValidationMessage] = useState('');
   const isEditMode = Boolean(initialTodo);
+  const categoryOptions = useMemo<PickerOption[]>(() => {
+    const serverOptions = categories.map((item) => ({
+      categoryId: item.id,
+      color: item.color,
+      label: item.name,
+    }));
+    const serverLabels = new Set(serverOptions.map((option) => option.label));
+    const localOnlyOptions = localCategoryOptions.filter((option) => !serverLabels.has(option.label));
+
+    return [...serverOptions, ...localOnlyOptions];
+  }, [categories, localCategoryOptions]);
 
   const categoryPickerOptions = useMemo<PickerOption[]>(
     () => [
@@ -109,6 +123,7 @@ export function AddTodoSheet({
       setTitle(initialTodo?.title ?? '');
       setMemo(initialTodo?.memo ?? '');
       setCategory(initialTodo?.category ?? '없음');
+      setCategoryId(initialTodo?.categoryId ?? null);
       setValidationMessage('');
     }
   }, [initialDate, initialTodo, visible]);
@@ -172,6 +187,7 @@ export function AddTodoSheet({
 
     const nextTodo = {
       category,
+      categoryId,
       date: selectedDate,
       memo: memo.trim() || undefined,
       title: nextTitle,
@@ -183,7 +199,7 @@ export function AddTodoSheet({
       onSave(nextTodo);
     }
     closeWithAnimation();
-  }, [category, closeWithAnimation, initialTodo, memo, onSave, onUpdate, selectedDate, title]);
+  }, [category, categoryId, closeWithAnimation, initialTodo, memo, onSave, onUpdate, selectedDate, title]);
 
   const handleDelete = useCallback(() => {
     if (!initialTodo) {
@@ -279,16 +295,27 @@ export function AddTodoSheet({
         <CategoryAddModal
           visible={isCategoryAddVisible}
           onClose={() => setCategoryAddVisible(false)}
-          onAdd={(nextCategory) => {
-            setCategoryOptions((options) => {
-              if (options.some((option) => option.label === nextCategory.label)) {
-                return options;
-              }
+          onAdd={async (nextCategory) => {
+            const optimisticCategory = {
+              color: nextCategory.color,
+              label: nextCategory.label,
+            };
 
-              return [...options, nextCategory];
-            });
+            setLocalCategoryOptions((options) =>
+              options.some((option) => option.label === optimisticCategory.label)
+                ? options
+                : [...options, optimisticCategory]
+            );
             setCategory(nextCategory.label);
+            setCategoryId(null);
             setValidationMessage('');
+
+            const createdCategory = await onCategoryCreate?.(nextCategory);
+
+            if (createdCategory) {
+              setCategory(createdCategory.name);
+              setCategoryId(createdCategory.id);
+            }
           }}
         />
 
@@ -296,14 +323,22 @@ export function AddTodoSheet({
           anchor={optionAnchor}
           onClose={() => setCategoryPickerVisible(false)}
           onRemoveOption={(value) => {
-            setCategoryOptions((options) => options.filter((option) => option.label !== value));
+            const removingCategory = categoryOptions.find((option) => option.label === value);
+
+            setLocalCategoryOptions((options) => options.filter((option) => option.label !== value));
+
+            if (removingCategory?.categoryId) {
+              onCategoryDelete?.(removingCategory.categoryId);
+            }
 
             if (category === value) {
               setCategory('없음');
+              setCategoryId(null);
             }
           }}
-          onSelect={(value) => {
+          onSelect={(value, option) => {
             setCategory(value);
+            setCategoryId(option?.categoryId ?? null);
             setValidationMessage('');
             setCategoryPickerVisible(false);
           }}
@@ -380,7 +415,7 @@ function OptionPickerModal({
   anchor: LayoutRectangle | null;
   onClose: () => void;
   onRemoveOption?: (value: string) => void;
-  onSelect: (value: string) => void;
+  onSelect: (value: string, option?: PickerOption) => void;
   options: PickerOption[];
   selectedValue: string;
   title: string;
@@ -434,7 +469,7 @@ function OptionPickerModal({
                     return;
                   }
 
-                  onSelect(option.label);
+                  onSelect(option.label, option);
                 }}
               />
             ))}
