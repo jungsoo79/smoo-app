@@ -1,14 +1,20 @@
 package com.smoo.backend.home.domain;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import java.time.OffsetDateTime;
+import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
-
-import java.time.OffsetDateTime;
-import java.util.UUID;
 
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -20,20 +26,16 @@ public class DashboardWidget {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // public.profiles(id)와 연결되는 사용자 ID
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
-    // TODO, SCHEDULE, MEMO, LEDGER, CALENDAR
     @Enumerated(EnumType.STRING)
     @Column(name = "widget_type", nullable = false)
     private WidgetType widgetType;
 
-    // 홈 화면에서 위젯이 보이는 순서
     @Column(name = "display_order", nullable = false)
     private Integer displayOrder;
 
-    // 위젯 활성화 여부
     @Column(name = "enabled", nullable = false)
     private Boolean enabled;
 

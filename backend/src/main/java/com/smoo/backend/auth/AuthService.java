@@ -8,12 +8,17 @@ import com.smoo.backend.common.exception.CustomException;
 import com.smoo.backend.common.exception.ErrorCode;
 import com.smoo.backend.deletion.AccountDeletionRequest;
 import com.smoo.backend.deletion.AccountDeletionRequestRepository;
+import com.smoo.backend.profile.Profile;
+import com.smoo.backend.profile.ProfileRepository;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.*;
+import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -21,6 +26,8 @@ import java.util.UUID;
 
 @Service
 public class AuthService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
     @Value("${supabase.url}")
     private String supabaseUrl;
@@ -30,9 +37,13 @@ public class AuthService {
 
     private final RestTemplate restTemplate = new RestTemplate();
     private final AccountDeletionRequestRepository deletionRequestRepository;
+    private final ProfileRepository profileRepository;
 
-    public AuthService(AccountDeletionRequestRepository deletionRequestRepository) {
+    public AuthService(
+            AccountDeletionRequestRepository deletionRequestRepository,
+            ProfileRepository profileRepository) {
         this.deletionRequestRepository = deletionRequestRepository;
+        this.profileRepository = profileRepository;
     }
 
     public LoginResponse login(LoginRequest request) {
@@ -41,6 +52,7 @@ public class AuthService {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("apikey", supabaseAnonKey);
+        headers.setBearerAuth(supabaseAnonKey);
 
         Map<String, String> body = new HashMap<>();
         body.put("email", request.getEmail());
@@ -75,7 +87,16 @@ public class AuthService {
 
         } catch (HttpClientErrorException e) {
             String errorBody = e.getResponseBodyAsString();
-            if (errorBody.contains("Invalid login credentials")) {
+            log.warn("Supabase login failed. status={}, body={}", e.getStatusCode(), errorBody);
+
+            String normalizedError = errorBody.toLowerCase();
+            if (normalizedError.contains("email not confirmed")
+                    || normalizedError.contains("email_not_confirmed")
+                    || normalizedError.contains("email_not_verified")) {
+                throw new CustomException(ErrorCode.EMAIL_NOT_CONFIRMED);
+            }
+
+            if (normalizedError.contains("invalid login credentials")) {
                 throw new CustomException(ErrorCode.INVALID_CREDENTIALS);
             } else {
                 throw new CustomException(ErrorCode.LOGIN_FAILED);
@@ -126,23 +147,52 @@ public class AuthService {
                 signupResponse.setId((String) responseBody.get("id"));
                 signupResponse.setEmail((String) responseBody.get("email"));
             }
+            signupResponse.setNickname(request.getNickname());
+
+            saveSignupProfile(signupResponse, request.getNickname());
 
             return signupResponse;
 
         } catch (HttpClientErrorException e) {
             String errorBody = e.getResponseBodyAsString();
-            if (errorBody.contains("already registered")) {
+            log.warn("Supabase signup failed. status={}, body={}", e.getStatusCode(), errorBody);
+
+            String normalizedError = errorBody.toLowerCase();
+            if (normalizedError.contains("already registered") || normalizedError.contains("user already registered")) {
                 throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS);
-            } else if (errorBody.contains("weak_password")) {
+            } else if (normalizedError.contains("weak_password")
+                    || normalizedError.contains("password should be")
+                    || normalizedError.contains("password must")) {
                 throw new CustomException(ErrorCode.WEAK_PASSWORD);
-            } else if (errorBody.contains("rate limit")) {
+            } else if (normalizedError.contains("rate limit") || normalizedError.contains("too many")) {
                 throw new CustomException(ErrorCode.EMAIL_RATE_LIMIT);
-            } else if (errorBody.contains("email_address_invalid")) {
+            } else if (normalizedError.contains("email_address_invalid") || normalizedError.contains("invalid email")) {
                 throw new CustomException(ErrorCode.INVALID_EMAIL);
             } else {
                 throw new CustomException(ErrorCode.SIGNUP_FAILED);
             }
         }
+    }
+
+    private void saveSignupProfile(SignupResponse signupResponse, String nickname) {
+        if (signupResponse.getId() == null) {
+            return;
+        }
+
+        UUID userId = UUID.fromString(signupResponse.getId());
+        OffsetDateTime now = OffsetDateTime.now();
+        Profile profile = profileRepository.findById(userId).orElseGet(Profile::new);
+
+        if (profile.getId() == null) {
+            profile.setId(userId);
+            profile.setCreatedAt(now);
+        }
+
+        profile.setEmail(signupResponse.getEmail());
+        profile.setName(nickname);
+        profile.setUpdatedAt(now);
+
+        profileRepository.save(profile);
     }
 
     public void verifyEmail(String email, String token) {

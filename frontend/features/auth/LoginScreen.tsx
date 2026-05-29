@@ -67,7 +67,13 @@ export default function LoginScreen() {
       router.replace('/(tabs)');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'LOGIN_FAILED';
-      setLoginError(message === 'INVALID_CREDENTIALS' ? '이메일 또는 비밀번호가 일치하지 않습니다.' : '로그인에 실패했습니다.');
+      if (message === 'INVALID_CREDENTIALS') {
+        setLoginError('이메일 또는 비밀번호가 일치하지 않습니다.');
+      } else if (message === 'EMAIL_NOT_CONFIRMED') {
+        setLoginError('이메일 인증 후 로그인해주세요.');
+      } else {
+        setLoginError('로그인에 실패했습니다.');
+      }
     } finally {
       setLoggingIn(false);
     }
