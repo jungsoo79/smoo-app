@@ -8,4 +8,5 @@ import lombok.Setter;
 public class SignupResponse {
     private String id;
     private String email;
+    private String nickname;
 }

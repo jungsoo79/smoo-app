@@ -10,6 +10,7 @@ export type LoginResponse = {
 export type SignupResponse = {
   id: string;
   email: string;
+  nickname?: string;
 };
 
 export type VerifyEmailResponse = {
@@ -20,8 +21,8 @@ export function login(email: string, password: string) {
   return postJson<LoginResponse>('/auth/login', { email, password }, false);
 }
 
-export function signup(email: string, password: string) {
-  return postJson<SignupResponse>('/auth/signup', { email, password }, false);
+export function signup(email: string, password: string, nickname: string) {
+  return postJson<SignupResponse>('/auth/signup', { email, password, nickname }, false);
 }
 
 export function verifyEmail(email: string, token: string) {

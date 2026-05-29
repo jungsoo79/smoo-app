@@ -9,40 +9,85 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  type TextStyle,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppColors, AppTypography } from '@/constants/appStyles';
-import { signup } from '@/features/auth/api';
+import { signup, verifyEmail } from '@/features/auth/api';
+
+type SignupStep = 'form' | 'codeSent';
+type MessageTone = 'error' | 'success';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PASSWORD_PATTERN = /[A-Za-z]/;
+const DIGIT_PATTERN = /\d/;
+const REQUIRED_CODE_LENGTH = 6;
+
+const SIGNUP_ERROR_MESSAGES: Record<string, string> = {
+  INVALID_EMAIL: '올바른 이메일 형식이 아닙니다.',
+  EMAIL_ALREADY_EXISTS: '이미 가입된 이메일입니다. 로그인하거나 다른 이메일을 사용해주세요.',
+  EMAIL_RATE_LIMIT: '이메일 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+  WEAK_PASSWORD: '영문과 숫자를 포함해 8자 이상 입력해주세요.',
+  SIGNUP_FAILED: '회원가입에 실패했습니다.',
+};
+
+const VERIFY_ERROR_MESSAGES: Record<string, string> = {
+  OTP_INVALID: '인증번호가 올바르지 않습니다.',
+  OTP_EXPIRED: '인증번호가 만료되었습니다. 회원가입을 다시 요청해주세요.',
+  VERIFY_FAILED: '이메일 인증에 실패했습니다. 잠시 후 다시 시도해주세요.',
+};
+
+const webTextInputReset =
+  Platform.OS === 'web'
+    ? ({
+        outlineStyle: 'none',
+        outlineWidth: 0,
+      } as unknown as TextStyle)
+    : undefined;
+
+function getErrorMessage(error: unknown, messages: Record<string, string>, fallback: string) {
+  const errorCode = error instanceof Error ? error.message : fallback;
+  return messages[errorCode] ?? messages[fallback] ?? fallback;
+}
+
+function normalizeVerificationCode(value: string) {
+  return value.replace(/\D/g, '');
+}
 
 export default function SignupScreen() {
+  const [step, setStep] = useState<SignupStep>('form');
   const [email, setEmail] = useState('');
-  const [verificationCode, setVerificationCode] = useState('');
-  const [isCodeSent, setCodeSent] = useState(false);
-  const [isCodeVerified, setCodeVerified] = useState(false);
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [nickname, setNickname] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
   const [isPasswordVisible, setPasswordVisible] = useState(false);
   const [isConfirmVisible, setConfirmVisible] = useState(false);
-  const [isSubmitted, setSubmitted] = useState(false);
+  const [isCodeFocused, setCodeFocused] = useState(false);
+  const [isFormSubmitted, setFormSubmitted] = useState(false);
+  const [isCodeSubmitted, setCodeSubmitted] = useState(false);
   const [isSigningUp, setSigningUp] = useState(false);
+  const [isVerifyingCode, setVerifyingCode] = useState(false);
   const [signupError, setSignupError] = useState('');
+  const [codeError, setCodeError] = useState('');
 
   const trimmedEmail = email.trim();
   const trimmedNickname = nickname.trim();
+  const isCodeStep = step === 'codeSent';
   const isEmailValid = EMAIL_PATTERN.test(trimmedEmail);
-  const isPasswordStrong = password.length >= 8 && /[A-Za-z]/.test(password) && /\d/.test(password);
+  const isPasswordStrong =
+    password.length >= 8 && PASSWORD_PATTERN.test(password) && DIGIT_PATTERN.test(password);
   const isPasswordConfirmTouched = passwordConfirm.length > 0;
   const isPasswordMatched = isPasswordConfirmTouched && password === passwordConfirm;
   const isNicknameValid = trimmedNickname.length >= 2;
-  const canSubmit = isEmailValid && isCodeVerified && isPasswordStrong && isPasswordMatched && isNicknameValid;
+  const isCodeComplete = verificationCode.length === REQUIRED_CODE_LENGTH;
+  const canSubmitSignup = isEmailValid && isPasswordStrong && isPasswordMatched && isNicknameValid;
+  const canVerifyCode = isCodeStep && isCodeComplete && !isVerifyingCode;
 
   const emailMessage = useMemo(() => {
-    if (!isSubmitted && trimmedEmail.length === 0) {
+    if (!isFormSubmitted && trimmedEmail.length === 0) {
       return '';
     }
 
@@ -51,30 +96,10 @@ export default function SignupScreen() {
     }
 
     return isEmailValid ? '' : '올바른 이메일 형식이 아닙니다.';
-  }, [isEmailValid, isSubmitted, trimmedEmail.length]);
-
-  const codeMessage = useMemo(() => {
-    if (isCodeVerified) {
-      return '이메일 형식 확인이 완료되었습니다.';
-    }
-
-    if (!isCodeSent) {
-      return '';
-    }
-
-    if (verificationCode.length === 0) {
-      return '인증번호를 입력해주세요.';
-    }
-
-    if (verificationCode.length < 6) {
-      return '인증번호 6자리를 입력해주세요.';
-    }
-
-    return '';
-  }, [isCodeSent, isCodeVerified, verificationCode.length]);
+  }, [isEmailValid, isFormSubmitted, trimmedEmail.length]);
 
   const passwordMessage = useMemo(() => {
-    if (!isSubmitted && password.length === 0) {
+    if (!isFormSubmitted && password.length === 0) {
       return '';
     }
 
@@ -83,10 +108,10 @@ export default function SignupScreen() {
     }
 
     return isPasswordStrong ? '사용 가능한 비밀번호입니다.' : '영문과 숫자를 포함해 8자 이상 입력해주세요.';
-  }, [isPasswordStrong, isSubmitted, password.length]);
+  }, [isFormSubmitted, isPasswordStrong, password.length]);
 
   const confirmMessage = useMemo(() => {
-    if (!isSubmitted && passwordConfirm.length === 0) {
+    if (!isFormSubmitted && passwordConfirm.length === 0) {
       return '';
     }
 
@@ -95,10 +120,10 @@ export default function SignupScreen() {
     }
 
     return isPasswordMatched ? '비밀번호가 일치합니다.' : '비밀번호가 일치하지 않습니다.';
-  }, [isPasswordMatched, isSubmitted, passwordConfirm.length]);
+  }, [isFormSubmitted, isPasswordMatched, passwordConfirm.length]);
 
   const nicknameMessage = useMemo(() => {
-    if (!isSubmitted && trimmedNickname.length === 0) {
+    if (!isFormSubmitted && trimmedNickname.length === 0) {
       return '';
     }
 
@@ -107,57 +132,99 @@ export default function SignupScreen() {
     }
 
     return isNicknameValid ? '' : '닉네임은 2자 이상 입력해주세요.';
-  }, [isNicknameValid, isSubmitted, trimmedNickname.length]);
+  }, [isFormSubmitted, isNicknameValid, trimmedNickname.length]);
 
-  const handleSendCode = () => {
-    setSubmitted(true);
-    setSignupError('');
-
-    if (!isEmailValid) {
-      setCodeSent(false);
-      setCodeVerified(false);
-      return;
+  const codeMessage = useMemo(() => {
+    if (codeError) {
+      return codeError;
     }
 
-    setCodeSent(true);
-    setCodeVerified(true);
+    if (!isCodeSubmitted && verificationCode.length === 0) {
+      return '';
+    }
+
+    if (verificationCode.length === 0) {
+      return '인증번호를 입력해주세요.';
+    }
+
+    return isCodeComplete ? '' : '인증번호 6자리를 입력해주세요.';
+  }, [codeError, isCodeComplete, isCodeSubmitted, verificationCode.length]);
+
+  const resetCodeStep = () => {
+    setStep('form');
     setVerificationCode('');
+    setCodeSubmitted(false);
+    setCodeError('');
   };
 
-  const handleVerifyCode = () => {
-    if (!isCodeSent) {
-      return;
-    }
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+    setSignupError('');
+    resetCodeStep();
+  };
 
-    setCodeVerified(true);
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    setSignupError('');
+    resetCodeStep();
+  };
+
+  const handlePasswordConfirmChange = (value: string) => {
+    setPasswordConfirm(value);
+    setSignupError('');
+    resetCodeStep();
+  };
+
+  const handleNicknameChange = (value: string) => {
+    setNickname(value);
+    setSignupError('');
+    resetCodeStep();
+  };
+
+  const handleCodeChange = (value: string) => {
+    setVerificationCode(normalizeVerificationCode(value));
+    setCodeSubmitted(false);
+    setCodeError('');
   };
 
   const handleSignup = async () => {
-    setSubmitted(true);
+    setFormSubmitted(true);
     setSignupError('');
+    setCodeError('');
 
-    if (!canSubmit) {
+    if (!canSubmitSignup) {
       return;
     }
 
     try {
       setSigningUp(true);
-      await signup(trimmedEmail, password);
-      router.replace('/login');
+      await signup(trimmedEmail, password, trimmedNickname);
+      setStep('codeSent');
+      setVerificationCode('');
+      setCodeSubmitted(false);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'SIGNUP_FAILED';
-
-      if (message === 'EMAIL_ALREADY_EXISTS') {
-        setSignupError('이미 가입된 이메일입니다.');
-      } else if (message === 'WEAK_PASSWORD') {
-        setSignupError('비밀번호가 너무 약합니다.');
-      } else if (message === 'EMAIL_RATE_LIMIT') {
-        setSignupError('이메일 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.');
-      } else {
-        setSignupError('회원가입에 실패했습니다.');
-      }
+      setSignupError(getErrorMessage(error, SIGNUP_ERROR_MESSAGES, 'SIGNUP_FAILED'));
     } finally {
       setSigningUp(false);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    setCodeSubmitted(true);
+    setCodeError('');
+
+    if (!canVerifyCode) {
+      return;
+    }
+
+    try {
+      setVerifyingCode(true);
+      await verifyEmail(trimmedEmail, verificationCode);
+      router.replace('/login');
+    } catch (error) {
+      setCodeError(getErrorMessage(error, VERIFY_ERROR_MESSAGES, 'VERIFY_FAILED'));
+    } finally {
+      setVerifyingCode(false);
     }
   };
 
@@ -173,131 +240,132 @@ export default function SignupScreen() {
           showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
             <Text style={styles.title}>회원가입</Text>
-            <Text style={styles.subtitle}>이메일 인증 후 Zerly 계정을 만들 수 있습니다.</Text>
+            <Text style={styles.subtitle}>계정 정보를 입력한 뒤 이메일 인증을 완료해주세요.</Text>
           </View>
 
           <View style={styles.form}>
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>이메일 주소</Text>
-              <View style={styles.emailRow}>
-                <TextInput
-                  autoCapitalize="none"
-                  autoComplete="email"
-                  keyboardType="email-address"
-                  onChangeText={(value) => {
-                    setEmail(value);
-                    setCodeSent(false);
-                    setCodeVerified(false);
-                    setVerificationCode('');
-                    setSignupError('');
-                  }}
-                  placeholder="name@example.com"
-                  placeholderTextColor="#A3A3A3"
-                  style={[styles.input, styles.emailInput, emailMessage && styles.inputError]}
-                  textContentType="emailAddress"
-                  value={email}
-                />
-                <Pressable
-                  onPress={handleSendCode}
-                  style={[styles.verifyButton, !isEmailValid && styles.secondaryButton]}>
-                  <Text style={[styles.verifyButtonText, !isEmailValid && styles.secondaryButtonText]}>
-                    인증
-                  </Text>
-                </Pressable>
-              </View>
-              {emailMessage ? <Text style={styles.errorText}>{emailMessage}</Text> : null}
-              {isCodeVerified ? (
-                <Text style={styles.helperText}>회원가입 요청 시 이메일 인증 메일이 발송될 수 있습니다.</Text>
-              ) : null}
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>인증번호</Text>
-              <View
-                style={[
-                  styles.inputWithAddon,
-                  isCodeVerified && styles.inputSuccess,
-                  codeMessage && !isCodeVerified && verificationCode.length >= 6 && styles.inputError,
-                ]}>
-                <TextInput
-                  editable={isCodeSent && !isCodeVerified}
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  onChangeText={(value) => {
-                    setVerificationCode(value);
-                    setCodeVerified(false);
-                  }}
-                  placeholder="6자리 입력"
-                  placeholderTextColor="#A3A3A3"
-                  style={styles.addonInput}
-                  value={verificationCode}
-                />
-                <Pressable disabled={!isCodeSent || isCodeVerified} onPress={handleVerifyCode} style={styles.codeButton}>
-                  <Text style={[styles.codeButtonText, (!isCodeSent || isCodeVerified) && styles.disabledText]}>
-                    확인
-                  </Text>
-                </Pressable>
-              </View>
-              {codeMessage ? (
-                <Text style={isCodeVerified ? styles.successText : styles.errorText}>{codeMessage}</Text>
-              ) : null}
-            </View>
-
-            <PasswordField
-              isVisible={isPasswordVisible}
-              label="비밀번호"
-              message={passwordMessage}
-              messageTone={isPasswordStrong ? 'success' : 'error'}
-              onChangeText={setPassword}
-              onToggle={() => setPasswordVisible((current) => !current)}
-              placeholder="영문+숫자 8자 이상"
-              value={password}
-            />
-
-            <PasswordField
-              isMatched={isPasswordMatched}
-              isVisible={isConfirmVisible}
-              label="비밀번호 확인"
-              message={confirmMessage}
-              messageTone={isPasswordMatched ? 'success' : 'error'}
-              onChangeText={setPasswordConfirm}
-              onToggle={() => setConfirmVisible((current) => !current)}
-              placeholder="비밀번호 재입력"
-              showMatchState={isPasswordConfirmTouched || isSubmitted}
-              value={passwordConfirm}
-            />
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>닉네임</Text>
               <TextInput
                 autoCapitalize="none"
-                onChangeText={(value) => {
-                  setNickname(value);
-                  setSignupError('');
-                }}
-                placeholder="예: smoo"
+                autoComplete="email"
+                editable={!isCodeStep}
+                keyboardType="email-address"
+                onChangeText={handleEmailChange}
+                placeholder="name@example.com"
                 placeholderTextColor="#A3A3A3"
-                style={[styles.input, nicknameMessage && styles.inputError]}
-                value={nickname}
+                style={[styles.input, emailMessage && styles.inputError, isCodeStep && styles.inputSuccess]}
+                textContentType="emailAddress"
+                value={email}
               />
-              {nicknameMessage ? <Text style={styles.errorText}>{nicknameMessage}</Text> : null}
+              {emailMessage ? <Text style={styles.errorText}>{emailMessage}</Text> : null}
             </View>
 
-            {signupError ? (
-              <View style={styles.formMessage}>
-                <MaterialIcons color="#BA1A1A" name="error-outline" size={18} />
-                <Text style={styles.formMessageText}>{signupError}</Text>
-              </View>
-            ) : null}
+            {!isCodeStep ? (
+              <>
+                <PasswordField
+                  isVisible={isPasswordVisible}
+                  label="비밀번호"
+                  message={passwordMessage}
+                  messageTone={isPasswordStrong ? 'success' : 'error'}
+                  onChangeText={handlePasswordChange}
+                  onToggle={() => setPasswordVisible((current) => !current)}
+                  placeholder="영문+숫자 8자 이상"
+                  value={password}
+                />
 
-            <Pressable
-              disabled={isSigningUp}
-              onPress={handleSignup}
-              style={[styles.primaryButton, (!canSubmit || isSigningUp) && styles.primaryButtonDisabled]}>
-              <Text style={[styles.primaryButtonText, (!canSubmit || isSigningUp) && styles.primaryButtonTextDisabled]}>
-                {isSigningUp ? '회원가입 중...' : '회원가입'}
-              </Text>
-            </Pressable>
+                <PasswordField
+                  isMatched={isPasswordMatched}
+                  isVisible={isConfirmVisible}
+                  label="비밀번호 확인"
+                  message={confirmMessage}
+                  messageTone={isPasswordMatched ? 'success' : 'error'}
+                  onChangeText={handlePasswordConfirmChange}
+                  onToggle={() => setConfirmVisible((current) => !current)}
+                  placeholder="비밀번호 재입력"
+                  showMatchState={isPasswordConfirmTouched || isFormSubmitted}
+                  value={passwordConfirm}
+                />
+
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.label}>닉네임</Text>
+                  <TextInput
+                    autoCapitalize="none"
+                    onChangeText={handleNicknameChange}
+                    placeholder="예: smoo"
+                    placeholderTextColor="#A3A3A3"
+                    style={[styles.input, nicknameMessage && styles.inputError]}
+                    value={nickname}
+                  />
+                  {nicknameMessage ? <Text style={styles.errorText}>{nicknameMessage}</Text> : null}
+                </View>
+
+                {signupError ? (
+                  <View style={styles.formMessage}>
+                    <MaterialIcons color="#BA1A1A" name="error-outline" size={18} />
+                    <Text style={styles.formMessageText}>{signupError}</Text>
+                  </View>
+                ) : null}
+
+                <Pressable
+                  disabled={isSigningUp}
+                  onPress={handleSignup}
+                  style={[styles.primaryButton, (!canSubmitSignup || isSigningUp) && styles.primaryButtonDisabled]}>
+                  <Text
+                    style={[
+                      styles.primaryButtonText,
+                      (!canSubmitSignup || isSigningUp) && styles.primaryButtonTextDisabled,
+                    ]}>
+                    {isSigningUp ? '인증 메일 요청 중...' : '회원가입'}
+                  </Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.label}>인증번호</Text>
+                  <View
+                    style={[
+                      styles.inputWithAddon,
+                      isCodeFocused && styles.inputFocused,
+                      codeMessage && styles.inputError,
+                    ]}>
+                    <TextInput
+                      editable={!isVerifyingCode}
+                      keyboardType="number-pad"
+                      maxLength={REQUIRED_CODE_LENGTH}
+                      onBlur={() => setCodeFocused(false)}
+                      onChangeText={handleCodeChange}
+                      onFocus={() => setCodeFocused(true)}
+                      placeholder="6자리 입력"
+                      placeholderTextColor="#A3A3A3"
+                      style={[styles.addonInput, webTextInputReset]}
+                      value={verificationCode}
+                    />
+                    <Pressable
+                      disabled={!canVerifyCode}
+                      onPress={handleVerifyCode}
+                      style={styles.codeButton}>
+                      <Text style={[styles.codeButtonText, !canVerifyCode && styles.disabledText]}>
+                        {isVerifyingCode ? '확인중' : '확인'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                  {codeMessage ? (
+                    <Text style={styles.errorText}>{codeMessage}</Text>
+                  ) : (
+                    <Text style={styles.helperText}>메일로 받은 6자리 인증번호를 입력해주세요.</Text>
+                  )}
+                </View>
+
+                <View style={styles.successBox}>
+                  <MaterialIcons color="#15803D" name="mark-email-read" size={18} />
+                  <Text style={styles.successBoxText}>
+                    회원가입 요청이 완료되었습니다. 이메일 인증 후 로그인할 수 있습니다.
+                  </Text>
+                </View>
+              </>
+            )}
           </View>
 
           <View style={styles.footerLinks}>
@@ -330,7 +398,7 @@ function PasswordField({
   isVisible: boolean;
   label: string;
   message: string;
-  messageTone: 'error' | 'success';
+  messageTone: MessageTone;
   onChangeText: (value: string) => void;
   onToggle: () => void;
   placeholder: string;
@@ -419,10 +487,6 @@ const styles = StyleSheet.create({
     color: AppColors.textSecondary,
     fontWeight: '600',
   },
-  emailRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
   input: {
     height: 54,
     borderRadius: 27,
@@ -432,9 +496,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     color: '#191C1D',
     fontSize: 16,
-  },
-  emailInput: {
-    flex: 1,
   },
   inputError: {
     borderColor: '#BA1A1A',
@@ -446,26 +507,6 @@ const styles = StyleSheet.create({
   },
   inputFocused: {
     borderColor: '#191C1D',
-  },
-  verifyButton: {
-    width: 76,
-    height: 54,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 27,
-    backgroundColor: '#000000',
-  },
-  verifyButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    backgroundColor: '#E7E8E9',
-  },
-  secondaryButtonText: {
-    color: '#777777',
   },
   inputWithAddon: {
     height: 54,
@@ -484,9 +525,10 @@ const styles = StyleSheet.create({
     paddingRight: 12,
     color: '#191C1D',
     fontSize: 16,
+    outlineWidth: 0,
   },
   codeButton: {
-    width: 58,
+    width: 72,
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
@@ -548,6 +590,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     fontWeight: '500',
+  },
+  successBox: {
+    minHeight: 44,
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F7FEF9',
+  },
+  successBoxText: {
+    flex: 1,
+    color: '#15803D',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
   },
   primaryButton: {
     height: 62,
