@@ -3,57 +3,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 
 import { AppBottomNav, AppFloatingActionButton, AppTopBar } from '@/components/app-chrome';
 
-type LedgerDay = {
-  day: string;
-  muted?: boolean;
-  active?: boolean;
-  expense?: string;
-  income?: string;
-};
-
-const ledgerDays: LedgerDay[] = [
-  { day: '1', expense: '-$45', income: '+120' },
-  { day: '2', expense: '-$12' },
-  { day: '3', active: true, expense: '-$0' },
-  { day: '4', expense: '-$128' },
-  { day: '5' },
-  { day: '6' },
-  { day: '7' },
-  { day: '8' },
-  { day: '9' },
-  { day: '10' },
-  { day: '11' },
-  { day: '12' },
-  { day: '13' },
-  { day: '14' },
-  { day: '15' },
-  { day: '16' },
-  { day: '17' },
-  { day: '18' },
-  { day: '19' },
-  { day: '20' },
-  { day: '21' },
-  { day: '22' },
-  { day: '23' },
-  { day: '24' },
-  { day: '25' },
-  { day: '26' },
-  { day: '27' },
-  { day: '28' },
-  { day: '29' },
-  { day: '30' },
-  { day: '31' },
-  { day: '1', muted: true },
-  { day: '2', muted: true },
-  { day: '3', muted: true },
-  { day: '4', muted: true },
-];
-
-const transactions = [
-  { title: '대박삼겹살', category: '식비', amount: '-₩42,850', color: '#55D521' },
-  { title: '이모가 용돈 줌', category: '용돈', amount: '+₩50,000', color: '#651BFF' },
-  { title: '지브라운', category: '카페', amount: '-₩1,400', color: '#8B5A2B' },
-];
+import { ledgerDays, transactions } from '@/constants/ledgerMockData';
 
 export default function LedgerScreen() {
   return (
@@ -72,7 +22,10 @@ export default function LedgerScreen() {
         </ScrollView>
       </View>
 
-      <AppFloatingActionButton label="가계부 항목 추가" />
+      <AppFloatingActionButton
+      label="가계부 항목 추가"
+      onPress={() => alert('가계부 항목 추가 예정')}
+      />
 
       <AppBottomNav active="ledger" />
     </View>
