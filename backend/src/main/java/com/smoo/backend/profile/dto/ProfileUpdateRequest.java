@@ -1,10 +1,14 @@
-package com.smoo.backend.profile.dto;
+package com.smoo.backend.settings.dto;
 
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Getter
-public class ProfileUpdateRequest {
-    private String name;
-    private String avatarUrl;
-    private String bio;
+@NoArgsConstructor
+public class PreferencesUpdateRequest {
+
+    private String theme;
+    private Boolean useSystemTheme;
+    private String language;
+    private String timeZone;
 }
