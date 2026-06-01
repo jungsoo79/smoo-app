@@ -55,7 +55,9 @@ public class SecurityConfig {
                         // Swagger 문서 접근 허용
                         .requestMatchers(
                                 "/swagger-ui/**",
+                                "/swagger-ui.html",
                                 "/v3/api-docs/**",
+                                "/v3/api-docs.yaml",
                                 "/swagger-resources/**"
                         ).permitAll()
 
