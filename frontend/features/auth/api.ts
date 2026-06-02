@@ -5,6 +5,8 @@ export type LoginResponse = {
   refreshToken: string;
   tokenType: string;
   expiresIn: number;
+  isDeletionPending?: boolean;
+  scheduledDeleteAt?: string | null;
 };
 
 export type SignupResponse = {

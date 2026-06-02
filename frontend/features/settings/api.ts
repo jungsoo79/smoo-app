@@ -113,6 +113,7 @@ export async function changePassword(payload: ChangePasswordPayload): Promise<vo
 
 export async function withdrawAccount(): Promise<void> {
   await postJson<void>('/account-deletion-requests', { reason: 'USER_REQUESTED_FROM_SETTINGS' });
+  await clearSession();
 }
 
 export async function getPushPreferences(): Promise<PushPreferences> {

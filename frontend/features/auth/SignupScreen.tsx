@@ -16,28 +16,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppColors, AppTypography } from '@/constants/appStyles';
 import { signup, verifyEmail } from '@/features/auth/api';
-
-type SignupStep = 'form' | 'codeSent';
-type MessageTone = 'error' | 'success';
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PASSWORD_PATTERN = /[A-Za-z]/;
-const DIGIT_PATTERN = /\d/;
-const REQUIRED_CODE_LENGTH = 6;
-
-const SIGNUP_ERROR_MESSAGES: Record<string, string> = {
-  INVALID_EMAIL: '올바른 이메일 형식이 아닙니다.',
-  EMAIL_ALREADY_EXISTS: '이미 가입된 이메일입니다. 로그인하거나 다른 이메일을 사용해주세요.',
-  EMAIL_RATE_LIMIT: '이메일 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
-  WEAK_PASSWORD: '영문과 숫자를 포함해 8자 이상 입력해주세요.',
-  SIGNUP_FAILED: '회원가입에 실패했습니다.',
-};
-
-const VERIFY_ERROR_MESSAGES: Record<string, string> = {
-  OTP_INVALID: '인증번호가 올바르지 않습니다.',
-  OTP_EXPIRED: '인증번호가 만료되었습니다. 회원가입을 다시 요청해주세요.',
-  VERIFY_FAILED: '이메일 인증에 실패했습니다. 잠시 후 다시 시도해주세요.',
-};
+import { getSignupErrorMessage, getVerifyErrorMessage } from '@/features/auth/error-messages';
+import { isStrongPassword, isValidEmail, isValidNickname } from '@/features/auth/validation';
 
 const webTextInputReset =
   Platform.OS === 'web'
@@ -47,10 +27,10 @@ const webTextInputReset =
       } as unknown as TextStyle)
     : undefined;
 
-function getErrorMessage(error: unknown, messages: Record<string, string>, fallback: string) {
-  const errorCode = error instanceof Error ? error.message : fallback;
-  return messages[errorCode] ?? messages[fallback] ?? fallback;
-}
+type SignupStep = 'form' | 'codeSent';
+type MessageTone = 'error' | 'success';
+
+const REQUIRED_CODE_LENGTH = 6;
 
 function normalizeVerificationCode(value: string) {
   return value.replace(/\D/g, '');
@@ -76,12 +56,11 @@ export default function SignupScreen() {
   const trimmedEmail = email.trim();
   const trimmedNickname = nickname.trim();
   const isCodeStep = step === 'codeSent';
-  const isEmailValid = EMAIL_PATTERN.test(trimmedEmail);
-  const isPasswordStrong =
-    password.length >= 8 && PASSWORD_PATTERN.test(password) && DIGIT_PATTERN.test(password);
+  const isEmailValid = isValidEmail(trimmedEmail);
+  const isPasswordStrong = isStrongPassword(password);
   const isPasswordConfirmTouched = passwordConfirm.length > 0;
   const isPasswordMatched = isPasswordConfirmTouched && password === passwordConfirm;
-  const isNicknameValid = trimmedNickname.length >= 2;
+  const isNicknameValid = isValidNickname(trimmedNickname);
   const isCodeComplete = verificationCode.length === REQUIRED_CODE_LENGTH;
   const canSubmitSignup = isEmailValid && isPasswordStrong && isPasswordMatched && isNicknameValid;
   const canVerifyCode = isCodeStep && isCodeComplete && !isVerifyingCode;
@@ -203,7 +182,8 @@ export default function SignupScreen() {
       setVerificationCode('');
       setCodeSubmitted(false);
     } catch (error) {
-      setSignupError(getErrorMessage(error, SIGNUP_ERROR_MESSAGES, 'SIGNUP_FAILED'));
+      const message = error instanceof Error ? error.message : 'SIGNUP_FAILED';
+      setSignupError(getSignupErrorMessage(message));
     } finally {
       setSigningUp(false);
     }
@@ -222,7 +202,8 @@ export default function SignupScreen() {
       await verifyEmail(trimmedEmail, verificationCode);
       router.replace('/login');
     } catch (error) {
-      setCodeError(getErrorMessage(error, VERIFY_ERROR_MESSAGES, 'VERIFY_FAILED'));
+      const message = error instanceof Error ? error.message : 'VERIFY_FAILED';
+      setCodeError(getVerifyErrorMessage(message));
     } finally {
       setVerifyingCode(false);
     }

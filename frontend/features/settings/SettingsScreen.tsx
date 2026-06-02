@@ -24,6 +24,8 @@ import {
   updatePushPreferences,
   withdrawAccount,
 } from '@/features/settings/api';
+import { getPasswordErrorMessage } from '@/features/auth/error-messages';
+import { isStrongPassword } from '@/features/auth/validation';
 import type { AuthProvider, PushPreferences, UserProfile } from '@/features/settings/types';
 import { ApiError } from '@/lib/api-client';
 
@@ -269,7 +271,7 @@ export default function SettingsScreen() {
       return;
     }
 
-    if (/\s/.test(newPassword) || newPassword.length < 8 || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) {
+    if (/\s/.test(newPassword) || !isStrongPassword(newPassword)) {
       setPasswordError('비밀번호 형식을 확인해주세요.');
       return;
     }
@@ -288,8 +290,9 @@ export default function SettingsScreen() {
     changePassword({ currentPassword, newPassword, confirmPassword })
       .then(closeModal)
       .catch((error) => {
+        const message = error instanceof Error ? error.message : 'PASSWORD_UPDATE_FAILED';
         setPasswordError(
-          isAuthError(error) ? AUTH_REQUIRED_MESSAGE : '비밀번호 변경에 실패했습니다. 입력 정보를 확인해주세요.',
+          isAuthError(error) ? AUTH_REQUIRED_MESSAGE : getPasswordErrorMessage(message),
         );
       })
       .finally(() => {

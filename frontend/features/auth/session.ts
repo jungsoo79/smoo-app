@@ -9,6 +9,8 @@ export type AuthSession = {
   tokenType: string;
   expiresIn: number;
   expiresAt: number;
+  isDeletionPending?: boolean;
+  scheduledDeleteAt?: string | null;
 };
 
 type SessionInput = Omit<AuthSession, 'expiresAt'>;
@@ -54,7 +56,11 @@ function isAuthSession(value: unknown): value is AuthSession {
     typeof session.refreshToken === 'string' &&
     typeof session.tokenType === 'string' &&
     typeof session.expiresIn === 'number' &&
-    typeof session.expiresAt === 'number'
+    typeof session.expiresAt === 'number' &&
+    (session.isDeletionPending === undefined || typeof session.isDeletionPending === 'boolean') &&
+    (session.scheduledDeleteAt === undefined ||
+      session.scheduledDeleteAt === null ||
+      typeof session.scheduledDeleteAt === 'string')
   );
 }
 

@@ -15,9 +15,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppColors, AppTypography } from '@/constants/appStyles';
 import { login } from '@/features/auth/api';
+import { getLoginErrorMessage } from '@/features/auth/error-messages';
 import { saveSession } from '@/features/auth/session';
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { isValidEmail } from '@/features/auth/validation';
 
 export default function LoginScreen() {
   const [loginId, setLoginId] = useState('');
@@ -29,7 +29,7 @@ export default function LoginScreen() {
   const [loginError, setLoginError] = useState('');
 
   const trimmedLoginId = loginId.trim();
-  const isLoginIdFilled = EMAIL_PATTERN.test(trimmedLoginId);
+  const isLoginIdFilled = isValidEmail(trimmedLoginId);
   const isPasswordFilled = password.length > 0;
 
   const loginIdError = useMemo(() => {
@@ -67,20 +67,14 @@ export default function LoginScreen() {
       router.replace('/(tabs)');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'LOGIN_FAILED';
-      if (message === 'INVALID_CREDENTIALS') {
-        setLoginError('이메일 또는 비밀번호가 일치하지 않습니다.');
-      } else if (message === 'EMAIL_NOT_CONFIRMED') {
-        setLoginError('이메일 인증 후 로그인해주세요.');
-      } else {
-        setLoginError('로그인에 실패했습니다.');
-      }
+      setLoginError(getLoginErrorMessage(message));
     } finally {
       setLoggingIn(false);
     }
   };
 
   const handleSocialLogin = () => {
-    router.replace('/(tabs)');
+    setLoginError('소셜 로그인은 준비 중입니다.');
   };
 
   return (
