@@ -2,7 +2,7 @@ spring:
   datasource:
     url: jdbc:postgresql://aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres
     username: postgres.zkqdwzqjlhylxicmixel
-    password: YOUR_SUPABASE_DB_PASSWORD
+    password: SzI7rde6aorIuhXd
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -13,3 +13,7 @@ spring:
     properties:
       hibernate:
         format_sql: true
+
+supabase:
+  url: YOUR_SUPABASE_PROJECT_URL
+  anon-key: YOUR_SUPABASE_ANON_KEY

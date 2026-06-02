@@ -1,68 +1,74 @@
 # smoo-app
 
-`smoo-app`은 Expo 프론트엔드와 Spring Boot 백엔드를 함께 관리하는 모노레포 프로젝트입니다.
+`smoo-app`은 Expo Router 기반 React Native 프론트엔드와 Spring Boot 백엔드를 함께 관리하는 모노레포입니다.
 
-## 프로젝트 구조
+## 백엔드 구성 계획
+
+목표 구조는 아래와 같습니다.
 
 ```text
-smoo-app/
-  frontend/   Expo 앱
-  backend/    Spring Boot 앱
+Expo 앱
+  -> Supabase Auth
+  -> Spring Boot API
+  -> Supabase PostgreSQL
 ```
 
-## 필수 버전
+- Supabase는 이메일 로그인, Google 로그인, Kakao 로그인, 세션 발급을 담당합니다.
+- Spring Boot는 앱 기능 API를 담당합니다.
+- Supabase PostgreSQL은 실제 데이터 저장소로 사용합니다.
+- 프론트는 로그인 후 Supabase access token을 Spring Boot API에 전달하는 방향으로 설계합니다.
 
-- Node.js: `20.x`
-- Java: `17`
-- Docker Desktop: 최신 안정 버전
+## 역할 분리
 
-## 프론트엔드
+프론트엔드가 Supabase에 직접 요청하는 범위:
 
-[frontend](C:\Users\park2\GitHub\smoo-app\frontend) 경로에서 실행합니다.
-
-```cmd
-npx expo start
+```text
+signUp
+signIn
+signOut
+session/access token 조회
 ```
 
-## 백엔드
+Spring Boot API가 담당할 범위:
 
-[backend](C:\Users\park2\GitHub\smoo-app\backend) 경로에서 실행합니다.
-
-```cmd
-gradlew.bat bootRun
+```text
+사용자 프로필
+메모
+체크리스트
+가계부
+캘린더
+통계/집계
+외부 API 연동
 ```
 
-헬스 체크:
+## Docker 개발 계획
 
-- [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health)
+- 개발 중 Docker는 Spring Boot 백엔드 실행에 사용합니다.
+- Expo 프론트엔드는 Docker에 넣지 않고 로컬에서 실행합니다.
+- 개발 DB는 로컬 Postgres를 새로 띄우지 않고, 이미 생성된 Supabase 원격 DB를 사용합니다.
+- 루트의 `docker-compose.yml`은 백엔드 컨테이너 실행 진입점으로 유지합니다.
 
-## 백엔드 설정 파일
-
-- [application.yaml](C:\Users\park2\GitHub\smoo-app\backend\src\main\resources\application.yaml): Git에 커밋하는 공통 설정 파일
-- [application-local.example.yaml](C:\Users\park2\GitHub\smoo-app\backend\src\main\resources\application-local.example.yaml): 로컬 설정 파일 예시 템플릿
-- [application-local.yaml](C:\Users\park2\GitHub\smoo-app\backend\src\main\resources\application-local.yaml): 개인 로컬 전용 설정 파일, 커밋 금지
-- [backend/.env.example](C:\Users\park2\GitHub\smoo-app\backend\.env.example): 팀원 온보딩용 예시 환경 변수 파일
-
-Supabase를 외부 PostgreSQL 데이터베이스로 사용합니다. 실제 DB 비밀번호나 서비스 키는 Git에 커밋하면 안 됩니다.
-
-예시 파일을 복사해서 로컬 백엔드 설정 파일을 생성합니다.
-
-```cmd
-copy backend\src\main\resources\application-local.example.yaml backend\src\main\resources\application-local.yaml
-```
-
-## Docker
-
-저장소 루트 [smoo-app](C:\Users\park2\GitHub\smoo-app) 경로에서 실행합니다.
+예상 실행 흐름:
 
 ```cmd
 docker compose up --build
 ```
 
-위 명령은 백엔드 컨테이너를 `8080` 포트에서 실행합니다.
+프론트엔드는 별도 터미널에서 실행합니다.
 
-## 참고 사항
+```cmd
+cd frontend
+npm run web
+```
 
-- 프론트엔드와 백엔드를 함께 작업할 때는 IntelliJ를 저장소 루트에서 여는 것을 권장합니다.
-- Gradle 명령은 [backend](C:\Users\park2\GitHub\smoo-app\backend) 경로에서 실행합니다.
-- `service_role` 키는 백엔드에서만 사용해야 합니다.
+## 이후 구현 순서
+
+1. Supabase Auth provider 설정을 먼저 완료합니다.
+2. Supabase DB 테이블 설계를 확정합니다.
+3. Spring Boot에서 Supabase JWT 검증 방식을 정합니다.
+4. 첫 API는 `users/me`로 시작합니다.
+5. 그 다음 `memos`, `checklist`, `ledger`, `calendar` 순서로 확장합니다.
+
+## 현재 상태
+
+아직 테이블과 실제 Spring Boot API 구현은 진행하지 않았습니다. 이 문서는 백엔드 방향을 맞추기 위한 계획 문서입니다.

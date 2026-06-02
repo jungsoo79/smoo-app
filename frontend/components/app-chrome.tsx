@@ -4,6 +4,8 @@ import type { ComponentProps } from 'react';
 import { StyleSheet, Text, TouchableOpacity, type GestureResponderEvent, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppColors, AppTypography } from '@/constants/appStyles';
+
 type AppTabKey = 'memo' | 'checklist' | 'home' | 'calendar' | 'ledger';
 
 const NAV_ITEMS: {
@@ -23,22 +25,41 @@ type AppTopBarProps = {
   title?: string;
   backgroundColor?: string;
   height?: number;
+  leftIcon?: ComponentProps<typeof MaterialIcons>['name'];
+  leftAccessibilityLabel?: string;
+  onLeftPress?: (event: GestureResponderEvent) => void;
 };
 
 export function AppTopBar({
   title,
   backgroundColor = 'rgba(255, 255, 255, 0.45)',
   height = 52,
+  leftIcon = 'menu',
+  leftAccessibilityLabel = '메뉴',
+  onLeftPress,
 }: AppTopBarProps) {
+  const handleLeftPress = (event: GestureResponderEvent) => {
+    if (onLeftPress) {
+      onLeftPress(event);
+      return;
+    }
+
+    router.push('/settings');
+  };
+
   return (
     <SafeAreaView style={[styles.topBarSafe, { backgroundColor }]} edges={['top']}>
       <View style={[styles.topBar, { backgroundColor, height }]}>
-        <TouchableOpacity accessibilityLabel="메뉴" style={styles.iconButton}>
-          <MaterialIcons name="menu" size={20} color="#191C1D" />
+        <TouchableOpacity
+          accessibilityLabel={leftAccessibilityLabel}
+          activeOpacity={0.72}
+          onPress={handleLeftPress}
+          style={styles.iconButton}>
+          <MaterialIcons name={leftIcon} size={20} color={AppColors.textBody} />
         </TouchableOpacity>
         {title ? <Text style={styles.topTitle}>{title}</Text> : null}
         <TouchableOpacity accessibilityLabel="알림" style={styles.iconButton}>
-          <MaterialIcons name="notifications-none" size={19} color="#191C1D" />
+          <MaterialIcons name="notifications-none" size={19} color={AppColors.textBody} />
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -61,7 +82,7 @@ export function AppBottomNav({ active }: { active: AppTabKey }) {
             <MaterialIcons
               name={item.icon}
               size={isActive ? 24 : 19}
-              color={isActive ? '#FFFFFF' : '#9CA1A3'}
+              color={isActive ? AppColors.textInverse : '#9CA1A3'}
             />
           </TouchableOpacity>
         );
@@ -79,7 +100,7 @@ export function AppFloatingActionButton({
 }) {
   return (
     <TouchableOpacity accessibilityLabel={label} activeOpacity={0.8} onPress={onPress} style={styles.fab}>
-      <MaterialIcons name="add" size={30} color="#FFFFFF" />
+      <MaterialIcons name="add" size={30} color={AppColors.textInverse} />
     </TouchableOpacity>
   );
 }
@@ -108,9 +129,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   topTitle: {
-    color: '#000000',
-    fontSize: 18,
-    lineHeight: 28,
+    ...AppTypography.cardTitle,
+    color: AppColors.textPrimary,
     fontWeight: '500',
   },
   bottomNav: {
@@ -143,7 +163,7 @@ const styles = StyleSheet.create({
   navButtonActive: {
     width: 48,
     height: 48,
-    backgroundColor: '#171717',
+    backgroundColor: AppColors.textBody,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.1,
@@ -159,7 +179,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#000000',
+    backgroundColor: AppColors.textPrimary,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 25 },
     shadowOpacity: 0.25,
