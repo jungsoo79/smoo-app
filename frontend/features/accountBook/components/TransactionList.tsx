@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { AppColors, AppTypography } from '@/constants/appStyles';
 
@@ -7,9 +7,11 @@ import { formatSelectedDateTitle, formatSignedWon } from './formatters';
 
 export function TransactionList({
   date,
+  onSelectTransaction,
   transactions,
 }: {
   date: string;
+  onSelectTransaction?: (transaction: TransactionWithMeta) => void;
   transactions: TransactionWithMeta[];
 }) {
   return (
@@ -27,7 +29,11 @@ export function TransactionList({
         ) : null}
 
         {transactions.map((transaction) => (
-          <View key={transaction.id} style={styles.item}>
+          <TouchableOpacity
+            activeOpacity={0.78}
+            key={transaction.id}
+            onPress={() => onSelectTransaction?.(transaction)}
+            style={styles.item}>
             <View style={styles.itemTextGroup}>
               <Text style={styles.title}>{transaction.title}</Text>
               <View style={styles.metaRow}>
@@ -47,7 +53,7 @@ export function TransactionList({
               ]}>
               {formatSignedWon(transaction.amount, transaction.type)}
             </Text>
-          </View>
+          </TouchableOpacity>
         ))}
       </View>
     </View>

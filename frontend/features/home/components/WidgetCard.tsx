@@ -95,10 +95,10 @@ export function WidgetCard({
 
         <Text style={styles.title}>{widget.title}</Text>
 
-        {widget.type === 'calendar' ? <CalendarWidget /> : null}
-        {widget.type === 'todo' ? <TodoWidget /> : null}
-        {widget.type === 'memo' ? <MemoWidget /> : null}
-        {widget.type === 'accountBook' ? <AccountBookWidget /> : null}
+        {widget.type === 'calendar' ? <CalendarWidget data={widget.data} /> : null}
+        {widget.type === 'todo' ? <TodoWidget data={widget.data} /> : null}
+        {widget.type === 'memo' ? <MemoWidget data={widget.data} /> : null}
+        {widget.type === 'accountBook' ? <AccountBookWidget data={widget.data} /> : null}
       </Pressable>
     </Animated.View>
   );

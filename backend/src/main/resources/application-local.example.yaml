@@ -1,14 +1,18 @@
 spring:
   datasource:
     url: jdbc:postgresql://aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres
-    username: postgres.zkqdwzqjlhylxicmixel
-    password: SzI7rde6aorIuhXd
+    username: YOUR_DATABASE_USERNAME
+    password: YOUR_DATABASE_PASSWORD
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_MAX_POOL_SIZE:2}
+      minimum-idle: ${DB_MIN_IDLE:0}
 
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: true
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     open-in-view: false
     properties:
       hibernate:

@@ -4,9 +4,12 @@ import com.smoo.backend.common.exception.CustomException;
 import com.smoo.backend.common.exception.ErrorCode;
 import com.smoo.backend.settings.dto.PreferencesResponse;
 import com.smoo.backend.settings.dto.PreferencesUpdateRequest;
+import com.smoo.backend.settings.dto.PushPreferencesResponse;
+import com.smoo.backend.settings.dto.PushPreferencesUpdateRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 import java.util.List;
 
@@ -24,6 +27,39 @@ public class SettingsService {
                 preferences.getTheme(),
                 preferences.getLanguage()
         );
+    }
+
+    @Transactional
+    public PushPreferencesResponse getPushPreferences(UUID userId) {
+        UserPreferences preferences = getOrCreatePreferences(userId);
+
+        return toPushPreferencesResponse(preferences);
+    }
+
+    @Transactional
+    public PushPreferencesResponse updatePushPreferences(UUID userId, PushPreferencesUpdateRequest request) {
+        UserPreferences preferences = getOrCreatePreferences(userId);
+
+        if (request.getAllPush() != null) {
+            preferences.setAllPush(request.getAllPush());
+        }
+
+        if (request.getSchedulePush() != null) {
+            preferences.setSchedulePush(request.getSchedulePush());
+        }
+
+        if (request.getTodoPush() != null) {
+            preferences.setTodoPush(request.getTodoPush());
+        }
+
+        if (request.getServicePush() != null) {
+            preferences.setServicePush(request.getServicePush());
+        }
+
+        preferences.setUpdatedAt(OffsetDateTime.now());
+        userPreferencesRepository.save(preferences);
+
+        return toPushPreferencesResponse(preferences);
     }
 
     @Transactional
@@ -53,5 +89,37 @@ public class SettingsService {
                 preferences.getTheme(),
                 preferences.getLanguage()
         );
+    }
+
+    private UserPreferences getOrCreatePreferences(UUID userId) {
+        return userPreferencesRepository.findByUserId(userId)
+                .orElseGet(() -> {
+                    OffsetDateTime now = OffsetDateTime.now();
+                    UserPreferences preferences = new UserPreferences();
+                    preferences.setUserId(userId);
+                    preferences.setTheme("system");
+                    preferences.setLanguage("ko");
+                    preferences.setAllPush(true);
+                    preferences.setSchedulePush(true);
+                    preferences.setTodoPush(true);
+                    preferences.setServicePush(false);
+                    preferences.setCreatedAt(now);
+                    preferences.setUpdatedAt(now);
+
+                    return userPreferencesRepository.save(preferences);
+                });
+    }
+
+    private PushPreferencesResponse toPushPreferencesResponse(UserPreferences preferences) {
+        return new PushPreferencesResponse(
+                defaultBoolean(preferences.getAllPush(), true),
+                defaultBoolean(preferences.getSchedulePush(), true),
+                defaultBoolean(preferences.getTodoPush(), true),
+                defaultBoolean(preferences.getServicePush(), false)
+        );
+    }
+
+    private Boolean defaultBoolean(Boolean value, Boolean defaultValue) {
+        return value != null ? value : defaultValue;
     }
 }

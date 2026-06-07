@@ -2,6 +2,7 @@ package com.smoo.backend.schedule;
 
 import com.smoo.backend.common.response.ApiResponse;
 import com.smoo.backend.common.response.SuccessCode;
+import com.smoo.backend.common.security.CurrentUserResolver;
 import com.smoo.backend.schedule.dto.ScheduleCreateRequest;
 import com.smoo.backend.schedule.dto.ScheduleResponse;
 import com.smoo.backend.schedule.dto.ScheduleUpdateRequest;
@@ -25,7 +26,7 @@ public class ScheduleController {
     public ResponseEntity<ApiResponse<ScheduleResponse>> createSchedule(
             Authentication authentication,
             @Valid @RequestBody ScheduleCreateRequest request) {
-        UUID userId = UUID.fromString(authentication.getName());
+        UUID userId = CurrentUserResolver.resolve(authentication);
         ScheduleResponse response = scheduleService.createSchedule(userId, request);
         return ResponseEntity.status(201).body(ApiResponse.success(SuccessCode.CREATED, response));
     }
@@ -34,7 +35,7 @@ public class ScheduleController {
     public ResponseEntity<ApiResponse<ScheduleResponse>> getSchedule(
             Authentication authentication,
             @PathVariable Long scheduleId) {
-        UUID userId = UUID.fromString(authentication.getName());
+        UUID userId = CurrentUserResolver.resolve(authentication);
         ScheduleResponse response = scheduleService.getSchedule(userId, scheduleId);
         return ResponseEntity.ok(ApiResponse.success(SuccessCode.COMMON_SUCCESS, response));
     }
@@ -44,7 +45,7 @@ public class ScheduleController {
             Authentication authentication,
             @PathVariable Long scheduleId,
             @RequestBody ScheduleUpdateRequest request) {
-        UUID userId = UUID.fromString(authentication.getName());
+        UUID userId = CurrentUserResolver.resolve(authentication);
         ScheduleResponse response = scheduleService.updateSchedule(userId, scheduleId, request);
         return ResponseEntity.ok(ApiResponse.success(SuccessCode.UPDATED, response));
     }
@@ -53,7 +54,7 @@ public class ScheduleController {
     public ResponseEntity<ApiResponse<Void>> deleteSchedule(
             Authentication authentication,
             @PathVariable Long scheduleId) {
-        UUID userId = UUID.fromString(authentication.getName());
+        UUID userId = CurrentUserResolver.resolve(authentication);
         scheduleService.deleteSchedule(userId, scheduleId);
         return ResponseEntity.ok(ApiResponse.success(SuccessCode.DELETED));
     }
@@ -64,8 +65,12 @@ public class ScheduleController {
             @RequestParam(required = false) String date,
             @RequestParam(required = false) Integer year,
             @RequestParam(required = false) Integer month) {
-        UUID userId = UUID.fromString(authentication.getName());
+        UUID userId = CurrentUserResolver.resolve(authentication);
         List<ScheduleResponse> response = scheduleService.getSchedules(userId, date, year, month);
         return ResponseEntity.ok(ApiResponse.success(SuccessCode.COMMON_SUCCESS, response));
     }
+
 }
+
+
+

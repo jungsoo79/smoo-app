@@ -10,7 +10,7 @@ import { WidgetAddBottomSheet } from "./components/WidgetAddBottomSheet";
 import {
   addHomeWidget,
   getAvailableWidgets,
-  getHomeWidgets,
+  getHomeDashboard,
   removeHomeWidget,
   updateHomeWidgetOrder,
 } from "./services/homeWidgetApi";
@@ -35,22 +35,32 @@ function formatTodayTitle() {
   return `오늘은 ${today.getMonth() + 1}월 ${today.getDate()}일 ${weekdays[today.getDay()]}입니다.`;
 }
 
+function toLocalDateString(date: Date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
 export default function HomeScreen() {
   const [widgets, setWidgets] = useState<HomeWidget[]>([]);
   const [availableWidgets, setAvailableWidgets] = useState<AvailableWidget[]>(
     [],
   );
+  const [addingWidgetType, setAddingWidgetType] = useState<HomeWidgetType | null>(null);
   const [isAddSheetVisible, setAddSheetVisible] = useState(false);
   const [isEditMode, setEditMode] = useState(false);
   const todayTitle = useMemo(formatTodayTitle, []);
 
   const refreshWidgets = useCallback(async () => {
-    const [nextWidgets, nextAvailableWidgets] = await Promise.all([
-      getHomeWidgets(),
+    const today = toLocalDateString(new Date());
+    const [dashboard, nextAvailableWidgets] = await Promise.all([
+      getHomeDashboard(today),
       getAvailableWidgets(),
     ]);
 
-    setWidgets(nextWidgets);
+    setWidgets(dashboard.widgets);
     setAvailableWidgets(nextAvailableWidgets);
   }, []);
 
@@ -59,10 +69,19 @@ export default function HomeScreen() {
   }, [refreshWidgets]);
 
   const handleAddWidget = async (type: HomeWidgetType) => {
-    await addHomeWidget(type);
-    setAddSheetVisible(false);
-    setEditMode(false);
-    await refreshWidgets();
+    if (addingWidgetType) {
+      return;
+    }
+
+    try {
+      setAddingWidgetType(type);
+      await addHomeWidget(type);
+      setAddSheetVisible(false);
+      setEditMode(false);
+      await refreshWidgets();
+    } finally {
+      setAddingWidgetType(null);
+    }
   };
 
   const handleDeleteWidget = async (widgetId: number) => {
@@ -138,6 +157,7 @@ export default function HomeScreen() {
       </View>
 
       <WidgetAddBottomSheet
+        addingWidgetType={addingWidgetType}
         availableWidgets={availableWidgets}
         visible={isAddSheetVisible}
         onAdd={handleAddWidget}

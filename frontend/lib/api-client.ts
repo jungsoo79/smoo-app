@@ -3,9 +3,8 @@ import { getAccessToken } from '@/features/auth/session';
 const DEFAULT_API_BASE_URL = 'http://localhost:8080';
 const API_PREFIX = '/api/v1';
 
-const apiBaseUrl =
-  (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
-    ?.EXPO_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
+const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+const apiBaseUrl = env?.EXPO_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
 
 type ApiErrorBody = {
   error?: string;
@@ -60,6 +59,10 @@ async function parseResponse<TResponse>(response: Response) {
 function buildApiUrl(path: string) {
   const baseUrl = apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+
+  if (normalizedPath.startsWith('/api/')) {
+    return `${baseUrl}${normalizedPath}`;
+  }
 
   if (normalizedPath.startsWith(API_PREFIX)) {
     return `${baseUrl}${normalizedPath}`;

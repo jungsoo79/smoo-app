@@ -1,5 +1,5 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Link, router } from 'expo-router';
+import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -186,11 +186,9 @@ export default function LoginScreen() {
               <Text style={styles.findText}>아이디/비밀번호 찾기</Text>
             </Pressable>
             <Text style={styles.footerDivider}>|</Text>
-            <Link href="/signup" asChild>
-              <Pressable>
-                <Text style={styles.signupText}>회원가입</Text>
-              </Pressable>
-            </Link>
+            <Pressable onPress={() => router.push('/signup')}>
+              <Text style={styles.signupText}>회원가입</Text>
+            </Pressable>
           </View>
 
           <Text style={styles.copyright}>© 2026 Smoo Archive System</Text>

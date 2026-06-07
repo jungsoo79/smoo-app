@@ -34,6 +34,15 @@ public class Schedule {
     @Column(name = "location")
     private String location;
 
+    @Column(name = "is_all_day", nullable = false)
+    private Boolean isAllDay;
+
+    @Column(name = "category_name")
+    private String categoryName;
+
+    @Column(name = "category_color")
+    private String categoryColor;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 

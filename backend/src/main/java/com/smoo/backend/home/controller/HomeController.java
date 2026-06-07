@@ -1,5 +1,6 @@
 package com.smoo.backend.home.controller;
 
+import com.smoo.backend.common.security.CurrentUserResolver;
 import com.smoo.backend.common.response.ApiResponse;
 import com.smoo.backend.common.response.SuccessCode;
 import com.smoo.backend.home.dto.request.WidgetCreateRequest;
@@ -12,6 +13,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -27,9 +29,10 @@ public class HomeController {
 
     @GetMapping("/dashboard")
     public ResponseEntity<ApiResponse<HomeDashboardResponse>> getDashboard(
-            @RequestHeader("X-USER-ID") UUID userId,
+            Authentication authentication,
             @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
+        UUID userId = CurrentUserResolver.resolve(authentication);
         HomeDashboardResponse response = homeService.getDashboard(userId, date);
 
         return ResponseEntity
@@ -39,8 +42,9 @@ public class HomeController {
 
     @GetMapping("/widgets")
     public ResponseEntity<ApiResponse<List<DashboardWidgetResponse>>> getWidgets(
-            @RequestHeader("X-USER-ID") UUID userId
+            Authentication authentication
     ) {
+        UUID userId = CurrentUserResolver.resolve(authentication);
         List<DashboardWidgetResponse> response = homeService.getWidgets(userId);
 
         return ResponseEntity
@@ -50,8 +54,9 @@ public class HomeController {
 
     @GetMapping("/widgets/available")
     public ResponseEntity<ApiResponse<List<AvailableWidgetResponse>>> getAvailableWidgets(
-            @RequestHeader("X-USER-ID") UUID userId
+            Authentication authentication
     ) {
+        UUID userId = CurrentUserResolver.resolve(authentication);
         List<AvailableWidgetResponse> response = homeService.getAvailableWidgets(userId);
 
         return ResponseEntity
@@ -61,9 +66,10 @@ public class HomeController {
 
     @PostMapping("/widgets")
     public ResponseEntity<ApiResponse<DashboardWidgetResponse>> createWidget(
-            @RequestHeader("X-USER-ID") UUID userId,
+            Authentication authentication,
             @Valid @RequestBody WidgetCreateRequest request
     ) {
+        UUID userId = CurrentUserResolver.resolve(authentication);
         DashboardWidgetResponse response = homeService.createWidget(userId, request);
 
         return ResponseEntity
@@ -73,9 +79,10 @@ public class HomeController {
 
     @DeleteMapping("/widgets/{widgetId}")
     public ResponseEntity<ApiResponse<Void>> deleteWidget(
-            @RequestHeader("X-USER-ID") UUID userId,
+            Authentication authentication,
             @PathVariable Long widgetId
     ) {
+        UUID userId = CurrentUserResolver.resolve(authentication);
         homeService.deleteWidget(userId, widgetId);
 
         return ResponseEntity
@@ -85,9 +92,10 @@ public class HomeController {
 
     @PatchMapping("/widgets/reorder")
     public ResponseEntity<ApiResponse<List<DashboardWidgetResponse>>> reorderWidgets(
-            @RequestHeader("X-USER-ID") UUID userId,
+            Authentication authentication,
             @Valid @RequestBody WidgetReorderRequest request
     ) {
+        UUID userId = CurrentUserResolver.resolve(authentication);
         List<DashboardWidgetResponse> response = homeService.reorderWidgets(userId, request);
 
         return ResponseEntity
@@ -95,3 +103,6 @@ public class HomeController {
                 .body(ApiResponse.success(SuccessCode.UPDATED, response));
     }
 }
+
+
+

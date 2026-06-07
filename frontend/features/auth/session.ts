@@ -100,6 +100,10 @@ export async function getAccessToken() {
   return session?.accessToken ?? null;
 }
 
+export function isSessionExpired(session: AuthSession) {
+  return session.expiresAt <= Date.now();
+}
+
 export async function clearSession() {
   await deleteStoredValue();
 }

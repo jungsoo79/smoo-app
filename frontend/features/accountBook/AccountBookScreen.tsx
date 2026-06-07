@@ -59,6 +59,7 @@ export default function LedgerScreen() {
   const [monthlyAnalysis, setMonthlyAnalysis] = useState<MonthlyAnalysisType>();
   const [selectedTransactions, setSelectedTransactions] = useState<TransactionWithMeta[]>([]);
   const [isAddSheetVisible, setAddSheetVisible] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<TransactionWithMeta | null>(null);
   const { month, year } = useMemo(() => getYearMonth(currentDate), [currentDate]);
 
   const loadMonth = useCallback(async (dateString: string) => {
@@ -112,6 +113,7 @@ export default function LedgerScreen() {
     (dateString: string) => {
       setSelectedDate(dateString);
       setCurrentDate(dateString);
+      setEditingTransaction(null);
       void loadMonth(dateString);
       void loadSelectedDate(dateString);
     },
@@ -140,16 +142,27 @@ export default function LedgerScreen() {
             year={year}
           />
           <MonthlyAnalysis analysis={monthlyAnalysis} />
-          <TransactionList date={selectedDate} transactions={selectedTransactions} />
+          <TransactionList
+            date={selectedDate}
+            transactions={selectedTransactions}
+            onSelectTransaction={(transaction) => {
+              setEditingTransaction(transaction);
+              setAddSheetVisible(true);
+            }}
+          />
         </ScrollView>
       </View>
 
       <AppFloatingActionButton label="가계부 항목 추가" onPress={() => setAddSheetVisible(true)} />
 
       <TransactionAddSheet
+        initialTransaction={editingTransaction}
         initialDate={selectedDate}
         visible={isAddSheetVisible}
-        onClose={() => setAddSheetVisible(false)}
+        onClose={() => {
+          setAddSheetVisible(false);
+          setEditingTransaction(null);
+        }}
         onSaved={refreshAfterSave}
       />
 

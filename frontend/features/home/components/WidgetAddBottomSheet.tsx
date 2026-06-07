@@ -20,6 +20,7 @@ import { MemoWidget } from "./MemoWidget";
 import { TodoWidget } from "./TodoWidget";
 
 type WidgetAddBottomSheetProps = {
+  addingWidgetType?: HomeWidgetType | null;
   availableWidgets: AvailableWidget[];
   visible: boolean;
   onAdd: (type: HomeWidgetType) => void;
@@ -27,6 +28,7 @@ type WidgetAddBottomSheetProps = {
 };
 
 export function WidgetAddBottomSheet({
+  addingWidgetType,
   availableWidgets,
   visible,
   onAdd,
@@ -123,8 +125,12 @@ export function WidgetAddBottomSheet({
               <TouchableOpacity
                 key={widget.type}
                 activeOpacity={0.82}
+                disabled={addingWidgetType !== null && addingWidgetType !== undefined}
                 onPress={() => onAdd(widget.type)}
-                style={styles.optionCard}
+                style={[
+                  styles.optionCard,
+                  addingWidgetType && widget.type !== addingWidgetType ? styles.optionCardDisabled : null,
+                ]}
               >
                 <View style={styles.optionHeader}>
                   <View>
@@ -198,6 +204,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 48,
     elevation: 6,
+  },
+  optionCardDisabled: {
+    opacity: 0.45,
   },
   optionHeader: {
     flexDirection: "row",

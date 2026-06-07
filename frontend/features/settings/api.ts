@@ -10,15 +10,6 @@ import { logout as requestLogout } from '@/features/auth/api';
 import { clearSession } from '@/features/auth/session';
 import { getJson, patchJson, postJson } from '@/lib/api-client';
 
-const MOCK_DELAY_MS = 160;
-
-let mockPushPreferences: PushPreferences = {
-  allPush: true,
-  schedulePush: true,
-  todoPush: true,
-  servicePush: false,
-};
-
 const DEFAULT_PREFERENCES: SettingsPreferences = {
   theme: 'system',
   language: 'ko',
@@ -35,16 +26,6 @@ type PreferencesResponse = {
   theme: string | null;
   language: string | null;
 };
-
-function delay() {
-  return new Promise((resolve) => {
-    setTimeout(resolve, MOCK_DELAY_MS);
-  });
-}
-
-function clonePushPreferences(): PushPreferences {
-  return { ...mockPushPreferences };
-}
 
 function toUserProfile(profile: ProfileResponse): UserProfile {
   return {
@@ -117,15 +98,11 @@ export async function withdrawAccount(): Promise<void> {
 }
 
 export async function getPushPreferences(): Promise<PushPreferences> {
-  await delay();
-  return clonePushPreferences();
+  return getJson<PushPreferences>('/settings/push-preferences');
 }
 
 export async function updatePushPreferences(payload: PushPreferences): Promise<PushPreferences> {
-  await delay();
-
-  mockPushPreferences = { ...payload };
-  return clonePushPreferences();
+  return patchJson<PushPreferences>('/settings/push-preferences', payload);
 }
 
 export async function logout(): Promise<void> {

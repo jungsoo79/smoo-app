@@ -1,12 +1,17 @@
 package com.smoo.backend.accountbook.service;
 
 import com.smoo.backend.accountbook.domain.*;
+import com.smoo.backend.accountbook.dto.request.CategoryCreateRequest;
 import com.smoo.backend.accountbook.dto.request.InitialBalanceRequest;
+import com.smoo.backend.accountbook.dto.request.RepeatRuleCreateRequest;
 import com.smoo.backend.accountbook.dto.request.TransactionCreateRequest;
 import com.smoo.backend.accountbook.dto.request.TransactionUpdateRequest;
 import com.smoo.backend.accountbook.dto.response.BalanceResponse;
+import com.smoo.backend.accountbook.dto.response.CategoryResponse;
 import com.smoo.backend.accountbook.dto.response.DailyTransactionResponse;
 import com.smoo.backend.accountbook.dto.response.MonthlyTransactionResponse;
+import com.smoo.backend.accountbook.dto.response.PaymentMethodResponse;
+import com.smoo.backend.accountbook.dto.response.RepeatRuleResponse;
 import com.smoo.backend.accountbook.dto.response.TransactionResponse;
 import com.smoo.backend.accountbook.repository.LedgerBookRepository;
 import com.smoo.backend.accountbook.repository.LedgerCategoryRepository;
@@ -133,6 +138,47 @@ public class AccountBookService {
     }
 
     @Transactional
+    public List<CategoryResponse> getCategories(UUID userId) {
+        ensureDefaultCategories(userId);
+
+        return ledgerCategoryRepository.findByUserId(userId)
+                .stream()
+                .map(this::toCategoryResponse)
+                .toList();
+    }
+
+    @Transactional
+    public CategoryResponse createCategory(UUID userId, CategoryCreateRequest request) {
+        LedgerCategory category = LedgerCategory.create(
+                userId,
+                request.getName(),
+                request.getColor() != null ? request.getColor() : "#D9DADB",
+                request.getType() != null ? request.getType() : TransactionType.EXPENSE,
+                false
+        );
+
+        return toCategoryResponse(ledgerCategoryRepository.save(category));
+    }
+
+    @Transactional
+    public List<PaymentMethodResponse> getPaymentMethods(UUID userId) {
+        ensureDefaultPaymentMethods(userId);
+
+        return ledgerPaymentMethodRepository.findByUserId(userId)
+                .stream()
+                .map(this::toPaymentMethodResponse)
+                .toList();
+    }
+
+    @Transactional
+    public RepeatRuleResponse createRepeatRule(UUID userId, RepeatRuleCreateRequest request) {
+        String name = request.getName() != null ? request.getName() : request.getCycle().name();
+        LedgerRepeatRule repeatRule = LedgerRepeatRule.create(userId, name, request.getCycle(), false);
+
+        return toRepeatRuleResponse(ledgerRepeatRuleRepository.save(repeatRule));
+    }
+
+    @Transactional
     public TransactionResponse updateTransaction(UUID userId, Long transactionId, TransactionUpdateRequest request) {
         LedgerTransaction transaction = ledgerTransactionRepository.findByIdAndUserId(transactionId, userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.RESOURCE_NOT_FOUND, "거래 내역을 찾을 수 없습니다."));
@@ -236,6 +282,58 @@ public class AccountBookService {
                 repeatRuleName,
                 transaction.getMemo()
         );
+    }
+
+    private CategoryResponse toCategoryResponse(LedgerCategory category) {
+        return new CategoryResponse(
+                category.getId(),
+                category.getName(),
+                category.getColor(),
+                category.getType(),
+                category.getIsDefault()
+        );
+    }
+
+    private PaymentMethodResponse toPaymentMethodResponse(LedgerPaymentMethod paymentMethod) {
+        return new PaymentMethodResponse(
+                paymentMethod.getId(),
+                paymentMethod.getName(),
+                paymentMethod.getIsDefault()
+        );
+    }
+
+    private RepeatRuleResponse toRepeatRuleResponse(LedgerRepeatRule repeatRule) {
+        return new RepeatRuleResponse(
+                repeatRule.getId(),
+                repeatRule.getName(),
+                repeatRule.getCycle(),
+                repeatRule.getIsDefault()
+        );
+    }
+
+    private void ensureDefaultCategories(UUID userId) {
+        if (!ledgerCategoryRepository.findByUserId(userId).isEmpty()) {
+            return;
+        }
+
+        ledgerCategoryRepository.saveAll(List.of(
+                LedgerCategory.create(userId, "식비", "#9C4545", TransactionType.EXPENSE, true),
+                LedgerCategory.create(userId, "교통", "#6B8BDD", TransactionType.EXPENSE, true),
+                LedgerCategory.create(userId, "생활", "#1B9720", TransactionType.EXPENSE, true),
+                LedgerCategory.create(userId, "월급", "#111111", TransactionType.INCOME, true)
+        ));
+    }
+
+    private void ensureDefaultPaymentMethods(UUID userId) {
+        if (!ledgerPaymentMethodRepository.findByUserId(userId).isEmpty()) {
+            return;
+        }
+
+        ledgerPaymentMethodRepository.saveAll(List.of(
+                LedgerPaymentMethod.create(userId, "카드", true),
+                LedgerPaymentMethod.create(userId, "현금", true),
+                LedgerPaymentMethod.create(userId, "계좌이체", true)
+        ));
     }
 
     private Long sumByType(List<LedgerTransaction> transactions, TransactionType type) {

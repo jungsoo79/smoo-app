@@ -12,6 +12,8 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
     // 일정 상세 조회
     Optional<Schedule> findByIdAndUserId(Long id, UUID userId);
 
+    List<Schedule> findByUserIdOrderByStartAtAsc(UUID userId);
+
     // 날짜별 일정 조회
     @Query(value = "SELECT * FROM schedules WHERE user_id = :userId AND DATE(start_at AT TIME ZONE 'Asia/Seoul') = CAST(:date AS date)", nativeQuery = true)
     List<Schedule> findByUserIdAndDate(@Param("userId") UUID userId, @Param("date") String date);

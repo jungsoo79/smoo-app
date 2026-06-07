@@ -30,6 +30,9 @@ public class ScheduleService {
         schedule.setStartAt(request.getStartAt());
         schedule.setEndAt(request.getEndAt());
         schedule.setLocation(request.getLocation());
+        schedule.setIsAllDay(request.getIsAllDay() != null ? request.getIsAllDay() : false);
+        schedule.setCategoryName(request.getCategoryName());
+        schedule.setCategoryColor(request.getCategoryColor());
         schedule.setCreatedAt(OffsetDateTime.now());
         schedule.setUpdatedAt(OffsetDateTime.now());
 
@@ -55,6 +58,9 @@ public class ScheduleService {
         if (request.getStartAt() != null) schedule.setStartAt(request.getStartAt());
         if (request.getEndAt() != null) schedule.setEndAt(request.getEndAt());
         if (request.getLocation() != null) schedule.setLocation(request.getLocation());
+        if (request.getIsAllDay() != null) schedule.setIsAllDay(request.getIsAllDay());
+        if (request.getCategoryName() != null) schedule.setCategoryName(request.getCategoryName());
+        if (request.getCategoryColor() != null) schedule.setCategoryColor(request.getCategoryColor());
         schedule.setUpdatedAt(OffsetDateTime.now());
 
         scheduleRepository.save(schedule);
@@ -89,6 +95,9 @@ public class ScheduleService {
                 schedule.getStartAt(),
                 schedule.getEndAt(),
                 schedule.getLocation(),
+                schedule.getIsAllDay(),
+                schedule.getCategoryName(),
+                schedule.getCategoryColor(),
                 schedule.getCreatedAt(),
                 schedule.getUpdatedAt()
         );
@@ -100,7 +109,8 @@ public class ScheduleService {
         } else if (year != null && month != null) {
             return getSchedulesByMonth(userId, year, month);
         } else {
-            throw new CustomException(ErrorCode.INVALID_REQUEST);
+            return scheduleRepository.findByUserIdOrderByStartAtAsc(userId)
+                    .stream().map(this::toResponse).collect(Collectors.toList());
         }
     }
 }

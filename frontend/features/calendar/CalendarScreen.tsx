@@ -1,12 +1,17 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Calendar, type DateData } from 'react-native-calendars';
 
 import { AppBottomNav, AppFloatingActionButton, AppTopBar } from '@/components/app-chrome';
 import { AppColors, AppTypography } from '@/constants/appStyles';
+import {
+  createCalendarEvent,
+  deleteCalendarEvent,
+  getCalendarEventsByDateMap,
+  updateCalendarEvent,
+} from '@/features/calendar/api';
 import { AddSheet } from '@/features/calendar/components/AddSheet';
-import { calendarEventsByDate } from '@/features/calendar/mock';
 import type { CalendarEvent, CalendarEventOccurrence, CalendarEventsByDate } from '@/features/calendar/types';
 
 type ChipTone = 'light' | 'medium' | 'darkGray' | 'black' | 'red';
@@ -286,7 +291,7 @@ function addEventToDates(eventsByDate: CalendarEventsByDate, event: CalendarEven
 export default function CalendarScreen() {
   const [currentDate, setCurrentDate] = useState(initialDate);
   const [selectedDate, setSelectedDate] = useState(initialDate);
-  const [eventsByDate, setEventsByDate] = useState<CalendarEventsByDate>(calendarEventsByDate);
+  const [eventsByDate, setEventsByDate] = useState<CalendarEventsByDate>({});
   const [isAddSheetVisible, setAddSheetVisible] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const selectedEvents = useMemo(
@@ -304,6 +309,10 @@ export default function CalendarScreen() {
     }),
     [selectedDate]
   );
+
+  useEffect(() => {
+    void getCalendarEventsByDateMap().then(setEventsByDate);
+  }, []);
 
   return (
     <View style={styles.screen}>
@@ -418,29 +427,25 @@ export default function CalendarScreen() {
           setEditingEvent(null);
         }}
         onDelete={(eventId) => {
-          setEventsByDate((events) => removeEventById(events, eventId));
+          void deleteCalendarEvent(eventId).then(() => {
+            setEventsByDate((events) => removeEventById(events, eventId));
+          });
           setEditingEvent(null);
         }}
         onSave={(event) => {
-          const nextEvent: CalendarEvent = {
-            ...event,
-            id: `event-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          };
-
+          void createCalendarEvent(event).then((nextEvent) => {
           setEventsByDate((events) => addEventToDates(events, nextEvent));
           setSelectedDate(event.date);
           setCurrentDate(event.date);
+          });
         }}
         onUpdate={(eventId, event) => {
-          const nextEvent: CalendarEvent = {
-            ...event,
-            id: eventId,
-          };
-
+          void updateCalendarEvent(eventId, event).then((nextEvent) => {
           setEventsByDate((events) => addEventToDates(removeEventById(events, eventId), nextEvent));
           setSelectedDate(event.date);
           setCurrentDate(event.date);
           setEditingEvent(null);
+          });
         }}
       />
 

@@ -2,12 +2,14 @@ package com.smoo.backend.memo.controller;
 
 import com.smoo.backend.common.response.ApiResponse;
 import com.smoo.backend.common.response.SuccessCode;
+import com.smoo.backend.common.security.CurrentUserResolver;
 import com.smoo.backend.memo.dto.request.*;
 import com.smoo.backend.memo.dto.response.*;
 import com.smoo.backend.memo.service.MemoService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,10 +24,11 @@ public class MemoController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<MemoSummaryResponse>>> getMemos(
-            @RequestHeader("X-USER-ID") UUID userId,
+            Authentication authentication,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Long categoryId
     ) {
+        UUID userId = CurrentUserResolver.resolve(authentication);
         List<MemoSummaryResponse> response = memoService.getMemos(userId, keyword, categoryId);
 
         return ResponseEntity
@@ -35,9 +38,10 @@ public class MemoController {
 
     @GetMapping("/{memoId}")
     public ResponseEntity<ApiResponse<MemoDetailResponse>> getMemo(
-            @RequestHeader("X-USER-ID") UUID userId,
+            Authentication authentication,
             @PathVariable Long memoId
     ) {
+        UUID userId = CurrentUserResolver.resolve(authentication);
         MemoDetailResponse response = memoService.getMemo(userId, memoId);
 
         return ResponseEntity
@@ -47,9 +51,10 @@ public class MemoController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<MemoDetailResponse>> createMemo(
-            @RequestHeader("X-USER-ID") UUID userId,
+            Authentication authentication,
             @Valid @RequestBody MemoCreateRequest request
     ) {
+        UUID userId = CurrentUserResolver.resolve(authentication);
         MemoDetailResponse response = memoService.createMemo(userId, request);
 
         return ResponseEntity
@@ -59,10 +64,11 @@ public class MemoController {
 
     @PatchMapping("/{memoId}")
     public ResponseEntity<ApiResponse<MemoDetailResponse>> updateMemo(
-            @RequestHeader("X-USER-ID") UUID userId,
+            Authentication authentication,
             @PathVariable Long memoId,
             @Valid @RequestBody MemoUpdateRequest request
     ) {
+        UUID userId = CurrentUserResolver.resolve(authentication);
         MemoDetailResponse response = memoService.updateMemo(userId, memoId, request);
 
         return ResponseEntity
@@ -72,9 +78,10 @@ public class MemoController {
 
     @DeleteMapping("/{memoId}")
     public ResponseEntity<ApiResponse<Void>> deleteMemo(
-            @RequestHeader("X-USER-ID") UUID userId,
+            Authentication authentication,
             @PathVariable Long memoId
     ) {
+        UUID userId = CurrentUserResolver.resolve(authentication);
         memoService.deleteMemo(userId, memoId);
 
         return ResponseEntity
@@ -84,8 +91,9 @@ public class MemoController {
 
     @GetMapping("/categories")
     public ResponseEntity<ApiResponse<List<MemoCategoryResponse>>> getCategories(
-            @RequestHeader("X-USER-ID") UUID userId
+            Authentication authentication
     ) {
+        UUID userId = CurrentUserResolver.resolve(authentication);
         List<MemoCategoryResponse> response = memoService.getCategories(userId);
 
         return ResponseEntity
@@ -95,9 +103,10 @@ public class MemoController {
 
     @PostMapping("/categories")
     public ResponseEntity<ApiResponse<MemoCategoryResponse>> createCategory(
-            @RequestHeader("X-USER-ID") UUID userId,
+            Authentication authentication,
             @Valid @RequestBody MemoCategoryCreateRequest request
     ) {
+        UUID userId = CurrentUserResolver.resolve(authentication);
         MemoCategoryResponse response = memoService.createCategory(userId, request);
 
         return ResponseEntity
@@ -107,10 +116,11 @@ public class MemoController {
 
     @PatchMapping("/categories/{categoryId}")
     public ResponseEntity<ApiResponse<MemoCategoryResponse>> updateCategory(
-            @RequestHeader("X-USER-ID") UUID userId,
+            Authentication authentication,
             @PathVariable Long categoryId,
             @Valid @RequestBody MemoCategoryUpdateRequest request
     ) {
+        UUID userId = CurrentUserResolver.resolve(authentication);
         MemoCategoryResponse response = memoService.updateCategory(userId, categoryId, request);
 
         return ResponseEntity
@@ -120,9 +130,10 @@ public class MemoController {
 
     @DeleteMapping("/categories/{categoryId}")
     public ResponseEntity<ApiResponse<Void>> deleteCategory(
-            @RequestHeader("X-USER-ID") UUID userId,
+            Authentication authentication,
             @PathVariable Long categoryId
     ) {
+        UUID userId = CurrentUserResolver.resolve(authentication);
         memoService.deleteCategory(userId, categoryId);
 
         return ResponseEntity
@@ -132,10 +143,11 @@ public class MemoController {
 
     @PostMapping("/{memoId}/attachments")
     public ResponseEntity<ApiResponse<MemoAttachmentResponse>> addAttachment(
-            @RequestHeader("X-USER-ID") UUID userId,
+            Authentication authentication,
             @PathVariable Long memoId,
             @Valid @RequestBody MemoAttachmentCreateRequest request
     ) {
+        UUID userId = CurrentUserResolver.resolve(authentication);
         MemoAttachmentResponse response = memoService.addAttachment(userId, memoId, request);
 
         return ResponseEntity
@@ -145,10 +157,11 @@ public class MemoController {
 
     @DeleteMapping("/{memoId}/attachments/{attachmentId}")
     public ResponseEntity<ApiResponse<Void>> deleteAttachment(
-            @RequestHeader("X-USER-ID") UUID userId,
+            Authentication authentication,
             @PathVariable Long memoId,
             @PathVariable Long attachmentId
     ) {
+        UUID userId = CurrentUserResolver.resolve(authentication);
         memoService.deleteAttachment(userId, memoId, attachmentId);
 
         return ResponseEntity
@@ -156,3 +169,6 @@ public class MemoController {
                 .body(ApiResponse.success(SuccessCode.DELETED));
     }
 }
+
+
+

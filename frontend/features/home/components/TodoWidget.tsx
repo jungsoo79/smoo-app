@@ -3,23 +3,37 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { AppColors, AppTypography } from '@/constants/appStyles';
 
-const todoItems = [
-  { title: '디자인 토큰 검토', checked: true },
-  { title: 'SVG 아이콘 내보내기', checked: false },
-  { title: '랜딩 에셋 업데이트', checked: false },
-];
+import type { HomeWidgetData } from '../types/homeWidget';
 
-export function TodoWidget() {
+type TodoPreviewItem = {
+  id?: number;
+  status?: string;
+  title?: string;
+};
+
+function getTodoItems(data?: HomeWidgetData): TodoPreviewItem[] {
+  return Array.isArray(data?.items) ? (data.items as TodoPreviewItem[]).slice(0, 3) : [];
+}
+
+export function TodoWidget({ data }: { data?: HomeWidgetData }) {
+  const todoItems = getTodoItems(data);
+
   return (
     <View style={styles.content}>
-      {todoItems.map((item) => (
-        <View key={item.title} style={styles.row}>
-          <View style={[styles.checkbox, item.checked && styles.checkboxChecked]}>
-            {item.checked ? <MaterialIcons name="check" size={14} color={AppColors.textInverse} /> : null}
+      {todoItems.length === 0 ? <Text style={styles.emptyText}>오늘 할 일이 없습니다.</Text> : null}
+
+      {todoItems.map((item, index) => {
+        const checked = item.status === 'completed';
+
+        return (
+          <View key={`${item.id ?? item.title ?? index}`} style={styles.row}>
+            <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
+              {checked ? <MaterialIcons name="check" size={14} color={AppColors.textInverse} /> : null}
+            </View>
+            <Text style={[styles.title, !checked && styles.titleMuted]}>{item.title}</Text>
           </View>
-          <Text style={[styles.title, !item.checked && styles.titleMuted]}>{item.title}</Text>
-        </View>
-      ))}
+        );
+      })}
     </View>
   );
 }
@@ -52,5 +66,10 @@ const styles = StyleSheet.create({
   },
   titleMuted: {
     color: AppColors.textMuted,
+  },
+  emptyText: {
+    ...AppTypography.body,
+    color: AppColors.textMuted,
+    fontWeight: '600',
   },
 });

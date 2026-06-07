@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
-  Dimensions,
   Modal,
   PanResponder,
   Pressable,
@@ -11,7 +10,6 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  type LayoutRectangle,
 } from 'react-native';
 
 import { CategoryAddModal } from '@/components/shared/CategoryAddModal';
@@ -21,10 +19,12 @@ import {
   createCategory,
   createRepeatRule,
   createTransaction,
+  deleteTransaction,
   getCategories,
   getPaymentMethods,
+  updateTransaction,
 } from '../api';
-import type { Category, PaymentMethod, RepeatFrequency, TransactionType } from '../types';
+import type { Category, PaymentMethod, RepeatFrequency, TransactionType, TransactionWithMeta } from '../types';
 import { CategorySelector } from './CategorySelector';
 import { formatDatePill } from './formatters';
 import { PaymentMethodSelector } from './PaymentMethodSelector';
@@ -44,7 +44,6 @@ type RepeatOption = {
   value: string;
 };
 
-const screenWidth = Dimensions.get('window').width;
 const repeatOptions: RepeatOption[] = [
   { frequency: null, interval: 0, label: '없음', value: 'none' },
   { frequency: 'daily', interval: 1, label: '매일', value: 'daily' },
@@ -62,11 +61,13 @@ function toLocalDateString(date: Date) {
 }
 
 export function TransactionAddSheet({
+  initialTransaction,
   initialDate,
   onClose,
   onSaved,
   visible,
 }: {
+  initialTransaction?: TransactionWithMeta | null;
   initialDate: string;
   onClose: () => void;
   onSaved: (date: string) => void;
@@ -89,8 +90,9 @@ export function TransactionAddSheet({
   const [selectedRepeatValue, setSelectedRepeatValue] = useState('none');
   const [isDatePickerVisible, setDatePickerVisible] = useState(false);
   const [isCategoryAddVisible, setCategoryAddVisible] = useState(false);
+  const [isSaving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
   const [openOptionMenu, setOpenOptionMenu] = useState<OptionMenu | null>(null);
-  const [optionAnchor, setOptionAnchor] = useState<LayoutRectangle | null>(null);
 
   useEffect(() => {
     Animated.spring(translateY, {
@@ -107,22 +109,26 @@ export function TransactionAddSheet({
       return;
     }
 
-    setType('expense');
-    setAmount('');
-    setTitle('');
-    setMemo('');
-    setDate(initialDate);
+    setType(initialTransaction?.type ?? 'expense');
+    setAmount(initialTransaction ? String(initialTransaction.amount) : '');
+    setTitle(initialTransaction?.title ?? '');
+    setMemo(initialTransaction?.memo ?? '');
+    setDate(initialTransaction?.date ?? initialDate);
     setSelectedCategoryId(null);
     setSelectedPaymentMethodId(null);
-    setSelectedRepeatValue('none');
+    setSelectedRepeatValue(initialTransaction?.repeatRuleId ? 'monthly' : 'none');
+    setSaving(false);
+    setFormError('');
     setOpenOptionMenu(null);
     setDatePickerVisible(false);
 
     void Promise.all([getCategories(), getPaymentMethods()]).then(([nextCategories, nextPaymentMethods]) => {
       setCategories(nextCategories);
       setPaymentMethods(nextPaymentMethods);
+      setSelectedCategoryId(initialTransaction?.categoryId ?? nextCategories[0]?.id ?? null);
+      setSelectedPaymentMethodId(initialTransaction?.paymentMethodId ?? nextPaymentMethods[0]?.id ?? null);
     });
-  }, [initialDate, visible]);
+  }, [initialDate, initialTransaction, visible]);
 
   const closeWithAnimation = useCallback(() => {
     Animated.timing(translateY, {
@@ -161,6 +167,7 @@ export function TransactionAddSheet({
   const selectedCategory = categories.find((category) => category.id === selectedCategoryId);
   const selectedPaymentMethod = paymentMethods.find((method) => method.id === selectedPaymentMethodId);
   const selectedRepeat = repeatOptions.find((option) => option.value === selectedRepeatValue) ?? repeatOptions[0];
+  const isEditMode = Boolean(initialTransaction);
 
   const optionPickerConfig = useMemo(() => {
     if (openOptionMenu === 'category') {
@@ -208,22 +215,33 @@ export function TransactionAddSheet({
     return null;
   }, [categories, openOptionMenu, paymentMethods, selectedCategoryId, selectedPaymentMethodId, selectedRepeatValue]);
 
-  const openOptionPicker = useCallback((menu: OptionMenu, ref: React.RefObject<View | null>) => {
-    ref.current?.measureInWindow((x, y, width, height) => {
-      setOptionAnchor({ height, width, x, y });
-      setOpenOptionMenu(menu);
-    });
+  const openOptionPicker = useCallback((menu: OptionMenu) => {
+    setOpenOptionMenu(menu);
   }, []);
 
   const submitTransaction = useCallback(async () => {
-    const parsedAmount = Number(amount.replace(/,/g, ''));
-    const nextTitle = title.trim() || selectedCategory?.name || (type === 'expense' ? '지출' : '수입');
-
-    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0 || !selectedCategoryId) {
+    if (isSaving) {
       return;
     }
 
-    const repeatRule = selectedRepeat.frequency
+    const parsedAmount = Number(amount.replace(/,/g, ''));
+    const nextTitle = title.trim() || selectedCategory?.name || (type === 'expense' ? '지출' : '수입');
+
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setFormError('금액을 입력해 주세요.');
+      return;
+    }
+
+    if (!selectedCategoryId) {
+      setFormError('카테고리를 선택해 주세요.');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setFormError('');
+
+      const repeatRule = selectedRepeat.frequency
       ? await createRepeatRule({
           frequency: selectedRepeat.frequency,
           interval: selectedRepeat.interval,
@@ -232,23 +250,36 @@ export function TransactionAddSheet({
         })
       : null;
 
-    await createTransaction({
-      amount: parsedAmount,
-      categoryId: selectedCategoryId,
-      date,
-      memo: memo.trim() || undefined,
-      paymentMethodId: selectedPaymentMethodId,
-      repeatRuleId: repeatRule?.id ?? null,
-      title: nextTitle,
-      type,
-    });
+      const payload = {
+        amount: parsedAmount,
+        categoryId: selectedCategoryId,
+        date,
+        memo: memo.trim() || undefined,
+        paymentMethodId: selectedPaymentMethodId,
+        repeatRuleId: repeatRule?.id ?? initialTransaction?.repeatRuleId ?? null,
+        title: nextTitle,
+        type,
+      };
 
-    onSaved(date);
-    closeWithAnimation();
+      if (initialTransaction) {
+        await updateTransaction(initialTransaction.id, payload);
+      } else {
+        await createTransaction(payload);
+      }
+
+      onSaved(date);
+      closeWithAnimation();
+    } catch {
+      setFormError('내용을 저장하지 못했습니다. 다시 시도해 주세요.');
+    } finally {
+      setSaving(false);
+    }
   }, [
     amount,
     closeWithAnimation,
     date,
+    initialTransaction,
+    isSaving,
     memo,
     onSaved,
     selectedCategory?.name,
@@ -259,6 +290,24 @@ export function TransactionAddSheet({
     title,
     type,
   ]);
+
+  const handleDeleteTransaction = useCallback(async () => {
+    if (!initialTransaction || isSaving) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setFormError('');
+      await deleteTransaction(initialTransaction.id);
+      onSaved(date);
+      closeWithAnimation();
+    } catch {
+      setFormError('거래를 삭제하지 못했습니다. 다시 시도해 주세요.');
+    } finally {
+      setSaving(false);
+    }
+  }, [closeWithAnimation, date, initialTransaction, isSaving, onSaved]);
 
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={closeWithAnimation}>
@@ -304,7 +353,7 @@ export function TransactionAddSheet({
 
             <CategorySelector
               rowRef={categoryRowRef}
-              onPress={() => openOptionPicker('category', categoryRowRef)}
+              onPress={() => openOptionPicker('category')}
               value={selectedCategory?.name ?? '없음'}
             />
 
@@ -324,19 +373,44 @@ export function TransactionAddSheet({
 
             <PaymentMethodSelector
               rowRef={paymentMethodRowRef}
-              onPress={() => openOptionPicker('paymentMethod', paymentMethodRowRef)}
+              onPress={() => openOptionPicker('paymentMethod')}
               value={selectedPaymentMethod?.name ?? '없음'}
             />
 
             <RepeatSelector
               rowRef={repeatRowRef}
-              onPress={() => openOptionPicker('repeat', repeatRowRef)}
+              onPress={() => openOptionPicker('repeat')}
               value={selectedRepeat.label}
             />
 
-            <TouchableOpacity activeOpacity={0.84} onPress={submitTransaction} style={styles.submitButton}>
-              <Text style={styles.submitText}>추가하기</Text>
-            </TouchableOpacity>
+            {formError ? <Text style={styles.errorText}>{formError}</Text> : null}
+
+            {isEditMode ? (
+              <View style={styles.editActionRow}>
+                <TouchableOpacity
+                  activeOpacity={0.84}
+                  disabled={isSaving}
+                  onPress={submitTransaction}
+                  style={[styles.editSaveButton, isSaving && styles.submitButtonDisabled]}>
+                  <Text style={styles.submitText}>수정하기</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.84}
+                  disabled={isSaving}
+                  onPress={handleDeleteTransaction}
+                  style={[styles.deleteButton, isSaving && styles.submitButtonDisabled]}>
+                  <Text style={styles.submitText}>삭제</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.84}
+                disabled={isSaving}
+                onPress={submitTransaction}
+                style={[styles.submitButton, isSaving && styles.submitButtonDisabled]}>
+                <Text style={styles.submitText}>추가하기</Text>
+              </TouchableOpacity>
+            )}
           </ScrollView>
         </Animated.View>
 
@@ -366,7 +440,6 @@ export function TransactionAddSheet({
         />
 
         <OptionPickerModal
-          anchor={optionAnchor}
           onClose={() => setOpenOptionMenu(null)}
           onSelect={(value) => {
             if (openOptionMenu === 'category') {
@@ -390,7 +463,6 @@ export function TransactionAddSheet({
 }
 
 function OptionPickerModal({
-  anchor,
   onClose,
   onSelect,
   options,
@@ -398,7 +470,6 @@ function OptionPickerModal({
   title,
   visible,
 }: {
-  anchor: LayoutRectangle | null;
   onClose: () => void;
   onSelect: (value: string) => void;
   options: PickerOption[];
@@ -406,16 +477,13 @@ function OptionPickerModal({
   title: string;
   visible: boolean;
 }) {
-  const pickerWidth = 150;
-  const pickerTop = anchor ? anchor.y + anchor.height - 10 : 0;
-  const pickerRight = anchor ? Math.max(16, screenWidth - anchor.x - anchor.width) : 32;
-
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
       <View style={styles.optionPickerLayer}>
         <Pressable accessibilityLabel={`${title} 선택 닫기`} onPress={onClose} style={styles.optionPickerBackdrop} />
 
-        <View style={[styles.optionPickerCard, { right: pickerRight, top: pickerTop, width: pickerWidth }]}>
+        <View style={styles.optionPickerCard}>
+          <Text style={styles.optionPickerTitle}>{title}</Text>
           <ScrollView
             bounces={false}
             showsVerticalScrollIndicator={false}
@@ -563,41 +631,100 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     elevation: 10,
   },
+  editActionRow: {
+    minHeight: 64,
+    marginTop: 34,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  editSaveButton: {
+    flex: 1,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#000000',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  deleteButton: {
+    width: 104,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#BA1A1A',
+    shadowColor: '#BA1A1A',
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.14,
+    shadowRadius: 24,
+    elevation: 8,
+  },
   submitText: {
     color: '#FFFFFF',
     fontSize: 18,
     lineHeight: 26,
     fontWeight: '700',
   },
+  submitButtonDisabled: {
+    backgroundColor: '#777777',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  errorText: {
+    color: '#BA1A1A',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
   optionPickerLayer: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
     zIndex: 999,
     elevation: 999,
   },
   optionPickerBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(0, 0, 0, 0.16)',
   },
   optionPickerCard: {
-    position: 'absolute',
-    borderRadius: 36,
+    width: '100%',
+    maxWidth: 320,
+    maxHeight: '72%',
+    borderRadius: 34,
+    paddingTop: 24,
+    paddingHorizontal: 24,
+    paddingBottom: 18,
     backgroundColor: '#FFFFFF',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.14,
     shadowRadius: 28,
     elevation: 24,
     zIndex: 1000,
   },
+  optionPickerTitle: {
+    color: '#191C1D',
+    fontSize: 20,
+    lineHeight: 28,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
   optionPickerList: {
-    maxHeight: 180,
+    maxHeight: 360,
   },
   optionPickerContent: {
-    paddingVertical: 14,
-    paddingHorizontal: 18,
+    paddingTop: 20,
+    paddingBottom: 2,
   },
   optionPickerItem: {
-    minHeight: 38,
+    minHeight: 58,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',

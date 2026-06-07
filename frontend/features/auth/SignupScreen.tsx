@@ -1,5 +1,5 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Link, router } from 'expo-router';
+import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -351,11 +351,9 @@ export default function SignupScreen() {
 
           <View style={styles.footerLinks}>
             <Text style={styles.footerText}>이미 계정이 있나요?</Text>
-            <Link href="/login" asChild>
-              <Pressable>
-                <Text style={styles.loginText}>로그인</Text>
-              </Pressable>
-            </Link>
+            <Pressable onPress={() => router.push('/login')}>
+              <Text style={styles.loginText}>로그인</Text>
+            </Pressable>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

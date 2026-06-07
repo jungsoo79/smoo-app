@@ -19,4 +19,10 @@ public class ScheduleCreateRequest {
     private OffsetDateTime endAt;
 
     private String location;
+
+    private Boolean isAllDay;
+
+    private String categoryName;
+
+    private String categoryColor;
 }

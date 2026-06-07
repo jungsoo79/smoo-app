@@ -13,6 +13,9 @@ public class ScheduleResponse {
     private OffsetDateTime startAt;
     private OffsetDateTime endAt;
     private String location;
+    private Boolean isAllDay;
+    private String categoryName;
+    private String categoryColor;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 }

@@ -1,13 +1,43 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
+import { router, Tabs } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
+import { clearSession, getSession, isSessionExpired } from '@/features/auth/session';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const [isSessionReady, setSessionReady] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    getSession()
+      .then(async (session) => {
+        if (!session || isSessionExpired(session)) {
+          await clearSession();
+          router.replace('/login');
+          return;
+        }
+
+        if (isMounted) {
+          setSessionReady(true);
+        }
+      })
+      .catch(() => {
+        router.replace('/login');
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  if (!isSessionReady) {
+    return null;
+  }
 
   return (
     <Tabs

@@ -28,6 +28,18 @@ public class UserPreferences {
     @Column(name = "language")
     private String language;
 
+    @Column(name = "all_push")
+    private Boolean allPush;
+
+    @Column(name = "schedule_push")
+    private Boolean schedulePush;
+
+    @Column(name = "todo_push")
+    private Boolean todoPush;
+
+    @Column(name = "service_push")
+    private Boolean servicePush;
+
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
 

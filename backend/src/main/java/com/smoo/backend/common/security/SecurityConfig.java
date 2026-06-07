@@ -32,34 +32,15 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        // CORS preflight 요청 허용
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-
-                        // 인증 관련 API는 로그인 전에도 접근 가능해야 함
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/auth/**").permitAll()
-
-                        // 공통 응답/예외 처리 테스트용 API
                         .requestMatchers("/api/test/**").permitAll()
-
-                        // 가계부 API 개발/테스트용 임시 허용
-                        .requestMatchers("/api/account-books/**").permitAll()
-
-                        // 메모 API 개발/테스트용 임시 허용
-                        .requestMatchers("/api/memos/**").permitAll()
-
-                        // 할 일 API 개발/테스트용 임시 허용
-                        .requestMatchers("/api/tasks/**").permitAll()
-                        .requestMatchers("/api/home/**").permitAll()
-
-                        // Swagger 문서 접근 허용
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
                                 "/swagger-resources/**"
                         ).permitAll()
-
-                        // 나머지 API는 JWT 인증 필요
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

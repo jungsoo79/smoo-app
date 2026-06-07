@@ -1,4 +1,5 @@
-import { calendarCategories, calendarEvents } from './mock';
+import { deleteJson, getJson, patchJson, postJson } from '@/lib/api-client';
+
 import type {
   CalendarCategory,
   CalendarEvent,
@@ -7,13 +8,28 @@ import type {
   CalendarTime,
 } from './types';
 
-let categories = [...calendarCategories];
-let events = [...calendarEvents];
+type ScheduleResponse = {
+  categoryColor: string | null;
+  categoryName: string | null;
+  createdAt: string;
+  description: string | null;
+  endAt: string | null;
+  id: number;
+  isAllDay: boolean | null;
+  location: string | null;
+  startAt: string;
+  title: string;
+  updatedAt: string;
+};
 
-function addDays(dateString: string, count: number) {
-  const date = new Date(`${dateString}T00:00:00`);
-  date.setDate(date.getDate() + count);
+const defaultCalendarCategory: CalendarCategory = {
+  color: '#E7E8E9',
+  id: 1,
+  isDefault: true,
+  name: '일정',
+};
 
+function toDateString(date: Date) {
   return [
     date.getFullYear(),
     String(date.getMonth() + 1).padStart(2, '0'),
@@ -21,55 +37,76 @@ function addDays(dateString: string, count: number) {
   ].join('-');
 }
 
-function getDatesBetween(startDate: string, endDate: string) {
-  const dates: string[] = [];
-  let currentDate = startDate;
+function toCalendarTime(date: Date): CalendarTime {
+  const hour = date.getHours();
 
-  while (currentDate <= endDate) {
-    dates.push(currentDate);
-    currentDate = addDays(currentDate, 1);
-  }
-
-  return dates;
+  return {
+    hour: hour % 12 || 12,
+    meridiem: hour >= 12 ? 'PM' : 'AM',
+    minute: date.getMinutes(),
+  };
 }
 
-function getTimeOrder(time: CalendarTime) {
-  const hour = time.hour % 12;
-  const meridiemOffset = time.meridiem === 'PM' ? 12 : 0;
+function toDateTime(date: string, time: CalendarTime, isAllDay: boolean) {
+  const hourBase = time.hour % 12;
+  const hour = isAllDay ? 0 : hourBase + (time.meridiem === 'PM' ? 12 : 0);
 
-  return (hour + meridiemOffset) * 60 + time.minute;
-}
-
-function sortEvents(first: CalendarEvent, second: CalendarEvent) {
-  if (first.isAllDay !== second.isAllDay) {
-    return first.isAllDay ? -1 : 1;
-  }
-
-  return getTimeOrder(first.startTime) - getTimeOrder(second.startTime);
+  return new Date(`${date}T${String(hour).padStart(2, '0')}:${String(isAllDay ? 0 : time.minute).padStart(2, '0')}:00`).toISOString();
 }
 
 function createEventsByDate(sourceEvents: CalendarEvent[]): CalendarEventsByDate {
   return sourceEvents.reduce<CalendarEventsByDate>((eventsByDate, event) => {
-    getDatesBetween(event.date, event.endDate).forEach((date) => {
-      eventsByDate[date] = [...(eventsByDate[date] ?? []), event].sort(sortEvents);
-    });
+    let currentDate = event.date;
+
+    while (currentDate <= event.endDate) {
+      eventsByDate[currentDate] = [...(eventsByDate[currentDate] ?? []), event];
+
+      const nextDate = new Date(`${currentDate}T00:00:00`);
+      nextDate.setDate(nextDate.getDate() + 1);
+      currentDate = toDateString(nextDate);
+    }
 
     return eventsByDate;
   }, {});
 }
 
-export async function getCalendarEvents(): Promise<CalendarEvent[]> {
-  return [...events].sort((first, second) => {
-    if (first.date !== second.date) {
-      return first.date.localeCompare(second.date);
-    }
+function toCalendarEvent(response: ScheduleResponse): CalendarEvent {
+  const startAt = new Date(response.startAt);
+  const endAt = response.endAt ? new Date(response.endAt) : startAt;
 
-    return sortEvents(first, second);
-  });
+  return {
+    category: response.categoryName ?? response.location ?? defaultCalendarCategory.name,
+    categoryColor: response.categoryColor ?? defaultCalendarCategory.color,
+    date: toDateString(startAt),
+    detail: response.description ?? '',
+    endDate: toDateString(endAt),
+    endTime: toCalendarTime(endAt),
+    id: String(response.id),
+    isAllDay: response.isAllDay ?? false,
+    startTime: toCalendarTime(startAt),
+    title: response.title,
+  };
+}
+
+function toScheduleRequest(payload: CalendarEventPayload) {
+  return {
+    description: payload.detail,
+    endAt: toDateTime(payload.endDate, payload.endTime, payload.isAllDay),
+    categoryColor: payload.categoryColor ?? defaultCalendarCategory.color,
+    categoryName: payload.category,
+    isAllDay: payload.isAllDay,
+    location: null,
+    startAt: toDateTime(payload.date, payload.startTime, payload.isAllDay),
+    title: payload.title,
+  };
+}
+
+export async function getCalendarEvents(): Promise<CalendarEvent[]> {
+  return (await getJson<ScheduleResponse[]>('/api/v1/schedules')).map(toCalendarEvent);
 }
 
 export async function getCalendarEventsByDateMap(): Promise<CalendarEventsByDate> {
-  return createEventsByDate(events);
+  return createEventsByDate(await getCalendarEvents());
 }
 
 export async function getCalendarEventsByDate(date: string): Promise<CalendarEvent[]> {
@@ -77,43 +114,29 @@ export async function getCalendarEventsByDate(date: string): Promise<CalendarEve
 }
 
 export async function createCalendarEvent(payload: CalendarEventPayload): Promise<CalendarEvent> {
-  const event: CalendarEvent = {
-    ...payload,
-    id: `event-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-  };
+  const event = await postJson<ScheduleResponse>('/api/v1/schedules', toScheduleRequest(payload));
 
-  events = [...events, event];
-
-  return event;
+  return toCalendarEvent(event);
 }
 
 export async function updateCalendarEvent(eventId: string, payload: CalendarEventPayload): Promise<CalendarEvent> {
-  const event: CalendarEvent = {
-    ...payload,
-    id: eventId,
-  };
+  const event = await patchJson<ScheduleResponse>(`/api/v1/schedules/${eventId}`, toScheduleRequest(payload));
 
-  events = events.map((item) => (item.id === eventId ? event : item));
-
-  return event;
+  return toCalendarEvent(event);
 }
 
 export async function deleteCalendarEvent(eventId: string): Promise<void> {
-  events = events.filter((event) => event.id !== eventId);
+  await deleteJson<void>(`/api/v1/schedules/${eventId}`);
 }
 
 export async function getCalendarCategories(): Promise<CalendarCategory[]> {
-  return [...categories];
+  return [defaultCalendarCategory];
 }
 
 export async function createCalendarCategory(payload: Omit<CalendarCategory, 'id' | 'isDefault'>): Promise<CalendarCategory> {
-  const category: CalendarCategory = {
+  return {
     ...payload,
-    id: Math.max(0, ...categories.map((item) => item.id)) + 1,
+    id: Date.now(),
     isDefault: false,
   };
-
-  categories = [...categories, category];
-
-  return category;
 }

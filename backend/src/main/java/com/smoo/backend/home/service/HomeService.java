@@ -89,7 +89,7 @@ public class HomeService {
             DashboardWidget widget = existingWidget.get();
 
             if (Boolean.TRUE.equals(widget.getEnabled())) {
-                throw new CustomException(ErrorCode.INVALID_REQUEST, "이미 추가된 위젯입니다.");
+                return toWidgetResponse(widget);
             }
 
             widget.enable();

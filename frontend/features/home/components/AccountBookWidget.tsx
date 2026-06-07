@@ -2,15 +2,38 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { AppColors, AppTypography } from '@/constants/appStyles';
 
-export function AccountBookWidget() {
+import type { HomeWidgetData } from '../types/homeWidget';
+
+function getNumber(value: unknown) {
+  return typeof value === 'number' ? value : 0;
+}
+
+function formatCurrency(value: number) {
+  return `${value.toLocaleString('ko-KR')}원`;
+}
+
+export function AccountBookWidget({ data }: { data?: HomeWidgetData }) {
+  const currentBalance = getNumber(data?.currentBalance);
+  const monthlyIncome = getNumber(data?.monthlyIncome);
+  const monthlyExpense = getNumber(data?.monthlyExpense);
+  const totalMonthlyAmount = monthlyIncome + monthlyExpense;
+  const expensePercent = totalMonthlyAmount > 0 ? Math.min(100, Math.round((monthlyExpense / totalMonthlyAmount) * 100)) : 0;
+
   return (
     <View style={styles.content}>
       <View style={styles.row}>
-        <Text style={styles.month}>5월 현황</Text>
-        <Text style={styles.percent}>70%</Text>
+        <View>
+          <Text style={styles.label}>현재 잔액</Text>
+          <Text style={styles.balance}>{formatCurrency(currentBalance)}</Text>
+        </View>
+        <Text style={styles.percent}>{expensePercent}%</Text>
       </View>
       <View style={styles.progressTrack}>
-        <View style={styles.progressFill} />
+        <View style={[styles.progressFill, { width: `${expensePercent}%` }]} />
+      </View>
+      <View style={styles.summaryRow}>
+        <Text style={styles.summaryText}>수입 {formatCurrency(monthlyIncome)}</Text>
+        <Text style={styles.summaryText}>지출 {formatCurrency(monthlyExpense)}</Text>
       </View>
     </View>
   );
@@ -18,14 +41,19 @@ export function AccountBookWidget() {
 
 const styles = StyleSheet.create({
   content: {
-    gap: 24,
+    gap: 18,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  month: {
+  label: {
+    ...AppTypography.caption,
+    color: AppColors.textMuted,
+    fontWeight: '700',
+  },
+  balance: {
     ...AppTypography.sectionTitle,
     fontWeight: '700',
   },
@@ -42,9 +70,18 @@ const styles = StyleSheet.create({
     backgroundColor: AppColors.surface,
   },
   progressFill: {
-    width: '70%',
     height: '100%',
     borderRadius: 999,
     backgroundColor: '#4A90E2',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  summaryText: {
+    ...AppTypography.caption,
+    color: AppColors.textMuted,
+    fontWeight: '600',
   },
 });

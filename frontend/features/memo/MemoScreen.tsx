@@ -7,14 +7,14 @@ import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity
 import { AppBottomNav, AppFloatingActionButton, AppTopBar } from '@/components/app-chrome';
 import { AppColors, AppTypography } from '@/constants/appStyles';
 
-import { useState } from 'react';
-import { MemoItem, memos } from '@/features/memo/mock';
+import { useEffect, useState } from 'react';
+import { createMemo, deleteMemo, getMemos, updateMemo, type MemoItem } from '@/features/memo/api';
 
 
 export default function MemoScreen() {
   const [searchText, setSearchText] = useState('');
 
-  const [memoList, setMemoList] = useState<MemoItem[]>(memos);
+  const [memoList, setMemoList] = useState<MemoItem[]>([]);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -29,7 +29,11 @@ export default function MemoScreen() {
 
   const defaultCategories = ['개인', '회의', '기획', '할 일', '쇼핑', '취미', '기타'];
 
-  const handleAddMemo = () => {
+  useEffect(() => {
+    void getMemos().then(setMemoList);
+  }, []);
+
+  const handleAddMemo = async () => {
   if (!newTitle.trim() || !newBody.trim()) {
     return;
   }
@@ -40,27 +44,19 @@ export default function MemoScreen() {
       : newCategory;
 
   if (editingMemoId !== null) {
-    setMemoList(
-      memoList.map((memo) =>
-        memo.id === editingMemoId
-          ? {
-            ...memo,
-            category: finalCategory,
-            title: newTitle,
-            body: [newBody],
-            date: new Date().toISOString().slice(0, 10),
-          }
-          : memo
-      )
-    );
-  } else {
-    const newMemo: MemoItem = {
-      id: Date.now(),
+    const updatedMemo = await updateMemo(editingMemoId, {
+      body: newBody,
       category: finalCategory,
       title: newTitle,
-      body: [newBody],
-      date: new Date().toISOString().slice(0, 10),
-    };
+    });
+
+    setMemoList(memoList.map((memo) => (memo.id === editingMemoId ? updatedMemo : memo)));
+  } else {
+    const newMemo = await createMemo({
+      body: newBody,
+      category: finalCategory,
+      title: newTitle,
+    });
 
     setMemoList([newMemo, ...memoList]);
   }
@@ -82,9 +78,11 @@ const handleDeleteMemo = (memo: MemoItem) => {
         text: '삭제',
         style: 'destructive',
         onPress: () => {
-          setMemoList(
-            memoList.filter((item) => item.id !== memo.id)
-          );
+          void deleteMemo(memo.id).then(() => {
+            setMemoList(
+              memoList.filter((item) => item.id !== memo.id)
+            );
+          });
         },
       },
     ]
